@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>dsh-admin</title>
+  </head>
+  <body>
+    <script>
+      ;(async () => {
+        const res = await fetch('/api/auth/me')
+        location.href = res.ok ? '/desktop.html' : '/login.html'
+      })()
+    </script>
+  </body>
+</html>

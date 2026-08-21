@@ -1,0 +1,26 @@
+# Intranet (LAN-IP, no domain) deployment example.
+#   1. Set PUBLIC_HOST to the server's LAN IP (static/DHCP-reserved).
+#   2. The DSH port range must match the published range; size it for your
+#      max concurrent users (one port per running DSH).
+#   3. Data (SQLite + encryption secret + per-user homes) lives in the named
+#      volume — losing it loses all accounts and stored API keys.
+services:
+  dsh-admin:
+    build: .
+    image: dsh-admin:latest
+    init: true # reap zombies; forward signals
+    restart: unless-stopped
+    stop_grace_period: 20s # child kill has a 5s SIGKILL backoff
+    ports:
+      - "3080:3080" # orchestrator web UI + API
+      - "40000-40100:40000-40100" # per-user child DSH ports
+    environment:
+      DSH_ADMIN_PUBLIC_HOST: 192.168.0.131 # <- your LAN IP
+      DSH_ADMIN_DSH_PORT_MIN: "40000"
+      DSH_ADMIN_DSH_PORT_MAX: "40100"
+      # DSH_ADMIN_DSH_BIN: "" # not needed; dsh is installed in the image
+    volumes:
+      - dsh-data:/var/lib/dsh-admin
+
+volumes:
+  dsh-data:

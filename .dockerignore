@@ -1,0 +1,9 @@
+node_modules
+lib
+.git
+npm-debug.log*
+*.md
+docs
+scripts
+.opencode
+AGENTS.md

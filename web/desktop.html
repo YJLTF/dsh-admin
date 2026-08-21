@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>桌面 — dsh-admin</title>
+    <link rel="icon" href="/logo.svg" />
+    <link rel="stylesheet" href="/design.css" />
+  </head>
+  <body>
+    <div class="desktop">
+      <div class="wallpaper"></div>
+
+      <div class="topbar">
+        <div class="brand">
+          <img class="logo" src="/logo.svg" alt="DeepSeek" />
+          <span class="wordmark"><svg viewBox="0 0 131 24" fill="currentColor" fill-rule="evenodd" xmlns="http://www.w3.org/2000/svg"><title>DeepSeek</title><path d="M117.986 0h-3.21v19.404h3.21V0zM8.7 5.215h1.83v2.838H8.7c-1.135 0-2.28.282-3.019 1.068-.738.785-1.016 1.99-1.016 3.194s.267 2.408 1.016 3.193c.75.786 1.884 1.068 3.018 1.068 1.135 0 2.28-.282 3.018-1.068.739-.785 1.017-1.99 1.017-3.193V.649h3.21v18.755h-3.21V18.21h-.589a3.498 3.498 0 01-.192.199c-.803.733-2.034.995-3.243.995-1.894 0-3.788-.472-5.03-1.78C2.44 16.314 2 14.303 2 12.303c0-2 .45-4 1.68-5.32 1.242-1.308 3.136-1.77 5.02-1.77zM57.564 18.9h-1.83v-2.837h1.83c1.134 0 2.28-.283 3.017-1.068.739-.785 1.017-1.99 1.017-3.194s-.267-2.408-1.017-3.194c-.749-.785-1.883-1.068-3.017-1.068s-2.28.283-3.018 1.068c-.738.786-1.017 1.99-1.017 3.194v11.655h-3.21V4.712h3.21v1.194h.59a3.42 3.42 0 01.186-.194l.005-.005c.803-.733 2.034-.995 3.243-.995 1.895 0 3.788.471 5.03 1.78 1.241 1.31 1.68 3.32 1.68 5.32 0 2-.45 4-1.68 5.319-1.23 1.32-3.135 1.77-5.019 1.77zM32.05 13.204v-1.14c0-2.064-.46-4.137-1.754-5.498-1.285-1.362-3.264-1.843-5.223-1.843-1.958 0-3.928.492-5.222 1.843-1.295 1.35-1.755 3.434-1.755 5.497 0 2.063.47 4.136 1.755 5.498 1.284 1.36 3.264 1.843 5.222 1.843 1.959 0 3.938-.493 5.223-1.843.663-.692 1.102-1.582 1.38-2.566h-3.168a5.026 5.026 0 01-.3.367c-.77.816-1.958 1.11-3.135 1.11-1.177 0-2.365-.304-3.136-1.11-.77-.807-1.048-2.063-1.048-3.299 0-1.236.278-2.482 1.049-3.298.77-.817 1.958-1.11 3.135-1.11 1.177 0 2.365.293 3.136 1.11.535.565.834 1.34.963 2.167H23.5v2.272h8.55zM48.168 12.063v1.141h-8.55v-2.272h5.671c-.129-.827-.428-1.602-.963-2.167-.77-.817-1.959-1.11-3.136-1.11s-2.365.293-3.136 1.11c-.77.816-1.049 2.063-1.049 3.298 0 1.236.279 2.492 1.05 3.299.77.806 1.958 1.11 3.135 1.11 1.177 0 2.365-.294 3.136-1.11.107-.116.203-.241.299-.367h3.168c-.278.985-.717 1.874-1.38 2.566-1.285 1.35-3.264 1.843-5.223 1.843s-3.938-.482-5.222-1.843c-1.285-1.362-1.756-3.435-1.756-5.498s.46-4.147 1.755-5.497c1.296-1.351 3.264-1.843 5.223-1.843s3.938.481 5.222 1.843c1.296 1.36 1.756 3.434 1.756 5.497zM78.635 18.315c-1.284.806-3.263 1.089-5.222 1.089-1.958 0-3.917-.294-5.212-1.09-1.295-.795-1.755-2.03-1.755-3.246h3.767c0 .472.225.953.824 1.257.6.304 1.54.419 2.462.419.92 0 1.851-.115 2.46-.42.611-.303.825-.784.825-1.256 0-.47-.214-.952-.824-1.256-.61-.304-1.627-.419-2.547-.419-1.777 0-3.563-.293-4.73-1.09-1.167-.795-1.584-2.03-1.584-3.245 0-1.215.417-2.44 1.584-3.246 1.167-.807 2.953-1.09 4.73-1.09 1.776 0 3.564.294 4.73 1.09 1.167.795 1.584 2.031 1.584 3.246h-3.264c0-.471-.203-.942-.749-1.257-.546-.303-1.391-.419-2.226-.419s-1.68.105-2.226.42c-.556.303-.75.785-.75 1.256 0 .47.204.942.75 1.256.545.304 1.316.42 2.151.42 1.959 0 3.938.292 5.222 1.088 1.295.796 1.756 2.032 1.756 3.246 0 1.215-.471 2.44-1.756 3.247zM96.507 12.063v1.141h-8.55v-2.272h5.672c-.129-.827-.429-1.602-.963-2.167-.771-.817-1.959-1.11-3.136-1.11s-2.366.293-3.136 1.11c-.77.816-1.048 2.063-1.048 3.298 0 1.236.278 2.492 1.048 3.299.77.806 1.959 1.11 3.135 1.11 1.178 0 2.366-.294 3.137-1.11.106-.116.203-.241.3-.367h3.167c-.279.985-.717 1.874-1.38 2.566-1.284 1.35-3.265 1.843-5.224 1.843-1.957 0-3.938-.482-5.222-1.843-1.284-1.362-1.754-3.435-1.754-5.498s.46-4.147 1.754-5.497c1.296-1.351 3.265-1.843 5.222-1.843 1.96 0 3.94.481 5.224 1.843 1.294 1.36 1.754 3.434 1.754 5.497zM112.624 13.204v-1.14c0-2.064-.46-4.137-1.754-5.498-1.285-1.362-3.265-1.843-5.223-1.843-1.959 0-3.928.492-5.222 1.843-1.296 1.35-1.756 3.434-1.756 5.497 0 2.063.471 4.136 1.756 5.498 1.284 1.36 3.263 1.843 5.222 1.843 1.958 0 3.938-.493 5.223-1.843.663-.692 1.102-1.582 1.38-2.566h-3.168l-.012.016c-.093.12-.185.24-.288.35-.77.817-1.957 1.11-3.135 1.11-1.177 0-2.365-.303-3.136-1.11-.77-.806-1.049-2.062-1.049-3.298 0-1.236.279-2.482 1.049-3.298.771-.817 1.959-1.11 3.136-1.11 1.178 0 2.365.293 3.135 1.11.536.565.836 1.34.964 2.167h-5.672v2.272h8.55zM128.73 19.404l-5.264-7.78 5.264-6.252h-3.97l-5.265 6.251 5.265 7.78h3.97z"/></svg></span>
+        </div>
+        <div class="right">
+          <span class="role hidden" id="roleBadge"></span>
+          <span class="who" id="who"></span>
+          <button class="btn ghost small logout" id="logoutBtn">退出</button>
+        </div>
+      </div>
+
+      <div class="desk-path">
+        <button class="btn ghost small back" id="backBtn">← 返回</button>
+        <span class="loc" id="deskPath">我的桌面 / 根目录</span>
+      </div>
+
+      <div class="icons">
+        <div class="desk-icon" data-open="dsh" role="button" tabindex="0">
+          <div class="tile dsh"><img src="/deepseek.webp" alt="DSH" /></div>
+          <span class="label">DSH</span>
+        </div>
+        <div class="desk-icon" data-app="upload" role="button" tabindex="0">
+          <div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
+          <span class="label">上传文件</span>
+        </div>
+        <div class="desk-icon" data-app="newfile" role="button" tabindex="0">
+          <div class="tile file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v5M9.5 14.5h5"/></svg></div>
+          <span class="label">新建文件</span>
+        </div>
+        <div class="desk-icon" data-open="files" role="button" tabindex="0">
+          <div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+          <span class="label">我的文件</span>
+        </div>
+        <div class="desk-icon hidden" id="adminIcon" data-open="admin" role="button" tabindex="0">
+          <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <span class="label">用户管理</span>
+        </div>
+        <div class="desk-icon hidden" id="sharedIcon" data-open="shared" role="button" tabindex="0">
+          <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></div>
+          <span class="label">共享配置</span>
+        </div>
+        <div class="desk-divider"></div>
+        <div id="fileIcons"></div>
+      </div>
+
+      <div class="taskbar">
+        <div class="app" data-open="dsh" role="button" tabindex="0" aria-label="DSH"><img src="/deepseek.webp" alt="DSH" /></div>
+        <div class="app" data-app="upload" role="button" tabindex="0" aria-label="上传文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
+        <div class="app" data-app="newfile" role="button" tabindex="0" aria-label="新建文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v5M9.5 14.5h5"/></svg></div>
+        <div class="app" data-open="files" role="button" tabindex="0" aria-label="我的文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <div class="app hidden" id="adminTask" data-open="admin" role="button" tabindex="0" aria-label="用户管理"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/></svg></div>
+        <div class="app hidden" id="sharedTask" data-open="shared" role="button" tabindex="0" aria-label="共享配置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></div>
+        <span class="clock" id="clock"></span>
+      </div>
+    </div>
+
+    <!-- 新建文件/文件夹对话框 -->
+    <div id="newFileDialog" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="nfTitle">
+      <div class="modal-card">
+        <h3 id="nfTitle" style="margin:0 0 14px">新建</h3>
+        <div class="field"><label for="nfName">名称</label><input id="nfName" placeholder="例如 notes.md 或 我的项目" /></div>
+        <div class="field"><label for="nfType">类型</label>
+          <select id="nfType">
+            <option value="file">文件</option>
+            <option value="dir">文件夹</option>
+          </select>
+        </div>
+        <div class="row-actions modal-actions">
+          <button class="btn primary" id="nfOk">创建</button>
+          <button class="btn ghost" id="nfCancel">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <input id="fileInput" type="file" class="hidden" />
+
+    <!-- ============ 窗口：DSH ============ -->
+    <div class="window hidden" id="win-dsh">
+      <div class="window-title">
+        <div class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>DSH</div>
+        <div class="controls"><button class="close" onclick="WindowManager.closeWindow('dsh')" aria-label="关闭窗口">✕</button></div>
+      </div>
+      <div class="window-body">
+        <div class="hidden banner" id="sharedConfigBanner">
+          <div id="sharedConfigText"></div>
+          <button class="btn primary small" id="sharedAcceptBtn">接收共享配置</button>
+          <button class="btn ghost small" id="sharedDismissBtn">暂不</button>
+        </div>
+        <div class="stat" id="dshState"><span class="dot off"></span> 未运行</div>
+        <div class="row-actions">
+          <button class="btn primary" id="launchBtn">启动 DSH</button>
+          <button class="btn ghost hidden" id="stopBtn">停止</button>
+          <button class="btn ghost hidden" id="openDshBtn">打开 DSH ↗</button>
+          <button class="btn ghost" id="managePluginsBtn">管理插件</button>
+        </div>
+        <div class="section-label">在此文件夹启动：<span id="dshFolder">根目录</span></div>
+        <div class="hidden" id="pluginPanel">
+          <div class="section-label">当前文件夹插件</div>
+          <div id="pluginList"></div>
+          <button class="btn primary small" id="savePluginsBtn" style="margin-top:10px">保存插件选择</button>
+        </div>
+      </div>
+      <div class="resize" title="拖动缩放"></div>
+    </div>
+
+    <!-- ============ 窗口：我的文件 ============ -->
+    <div class="window hidden" id="win-files">
+      <div class="window-title">
+        <div class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>我的文件</div>
+        <div class="controls"><button class="close" onclick="WindowManager.closeWindow('files')" aria-label="关闭窗口">✕</button></div>
+      </div>
+      <div class="window-body">
+        <div class="pathbar">
+          <button class="btn ghost small" id="newFolderBtn">新建文件夹</button>
+          <span class="crumbs" id="breadcrumb"></span>
+        </div>
+        <table class="files">
+          <thead><tr><th>名称</th><th>类型</th><th>大小</th><th>修改时间</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <div class="resize" title="拖动缩放"></div>
+    </div>
+
+    <!-- ============ 窗口：管理台（用户管理） ============ -->
+    <div class="window hidden" id="win-admin">
+      <div class="window-title">
+        <div class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/></svg>用户管理</div>
+        <div class="controls"><button class="close" onclick="WindowManager.closeWindow('admin')" aria-label="关闭窗口">✕</button></div>
+      </div>
+      <div class="window-body">
+        <div class="section-label">用户审核与管理</div>
+        <table class="admin" id="adminUsers">
+          <thead><tr><th>用户名</th><th>角色</th><th>注册时间</th><th>操作</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="resize" title="拖动缩放"></div>
+    </div>
+
+    <!-- ============ 窗口：共享配置 ============ -->
+    <div class="window hidden" id="win-shared">
+      <div class="window-title">
+        <div class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>共享模型配置</div>
+        <div class="controls"><button class="close" onclick="WindowManager.closeWindow('shared')" aria-label="关闭窗口">✕</button></div>
+      </div>
+      <div class="window-body">
+        <div class="section-label">共享模型配置（同步给选择接收的用户）</div>
+        <p class="hint">
+          提供方将合并进用户的 DSH 模型设置；同名路由会被共享配置覆盖，用户自建的其他提供方不受影响。
+          已接收用户会重新收到更新提示，由其自行确认后生效。
+        </p>
+        <div id="sharedProviders"></div>
+        <div class="row-actions gap-top-s">
+          <button class="btn ghost small" id="addProviderBtn">+ 添加提供方</button>
+        </div>
+
+        <div class="section-label gap-top">共享凭据（引用 → API Key）</div>
+        <table class="admin" id="sharedCreds">
+          <thead><tr><th>引用名</th><th>API Key</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="row-actions gap-top-s">
+          <button class="btn ghost small" id="addCredBtn">+ 添加凭据</button>
+          <span style="flex:1"></span>
+          <span id="sharedMeta" class="hint"></span>
+          <button class="btn primary" id="saveSharedBtn">保存共享配置</button>
+        </div>
+        <p class="msg hint" id="sharedMsg"></p>
+      </div>
+      <div class="resize" title="拖动缩放"></div>
+    </div>
+
+    <script src="/window-manager.js"></script>
+    <script src="/shared-config-editor.js"></script>
+    <script>
+      // ---------- 会话 ----------
+      let user = null
+      async function me() {
+        const res = await fetch('/api/auth/me')
+        if (!res.ok) return null
+        return (await res.json()).user
+      }
+
+      // ---------- 辅助函数 ----------
+      /** 对不可信文本进行转义，以便插入 HTML/属性。 */
+      const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+      /** fetch 封装：绝不抛出异常；返回 { ok, status, body | error }。 */
+      async function api(path, options = {}) {
+        try {
+          const res = await fetch(path, {
+                ...options,
+                headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+              })
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}))
+            return { ok: false, status: res.status, error: body.error || String(res.status) }
+          }
+          return { ok: true, status: res.status, body: await res.json().catch(() => null) }
+        } catch (err) {
+          return { ok: false, status: 0, error: err instanceof Error ? err.message : String(err) }
+        }
+      }
+
+      // ---------- 窗口管理器（外部） + 应用接线 ----------
+      const { openWindow, closeWindow, isOpen } = WindowManager
+      document.querySelectorAll('[data-app]').forEach((el) => el.addEventListener('click', () => appAction(el.dataset.app)))
+      // 为操作图标（上传/新建文件）提供键盘激活。
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        const el = event.target.closest ? event.target.closest('[data-app]') : null
+        if (el) {
+          event.preventDefault()
+          appAction(el.dataset.app)
+        }
+      })
+      // 管理台窗口每次打开时刷新数据。
+      document.querySelectorAll('#adminIcon, #adminTask').forEach((el) => el.addEventListener('click', () => { if (user && user.role === 'admin') loadUsers() }))
+      document.querySelectorAll('#sharedIcon, #sharedTask').forEach((el) => el.addEventListener('click', () => { if (user && user.role === 'admin') loadShared() }))
+
+      // ---------- 当前文件夹（共享） ----------
+      let currentPath = []
+      function pathString() { return currentPath.join('/') }
+      function deskPathLabel() { return currentPath.length ? '我的桌面 / ' + currentPath.join(' / ') : '我的桌面 / 根目录' }
+
+      // ---------- 桌面文件网格 ----------
+      const fileIcons = document.getElementById('fileIcons')
+      const deskPathEl = document.getElementById('deskPath')
+      const backBtn = document.getElementById('backBtn')
+      const TILE_DIR = '<div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>'
+      const TILE_FILE = '<div class="tile file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>'
+      function entryPath(name) { return encodeURIComponent(pathString() ? pathString() + '/' + name : name) }
+      function renderDesktop(entries) {
+        fileIcons.innerHTML = ''
+        if (!entries.length) {
+          fileIcons.innerHTML = '<p class="desk-empty">此文件夹为空</p>'
+          return
+        }
+        for (const e of entries) {
+          const icon = document.createElement('div')
+          icon.className = 'desk-icon'
+          icon.dataset.entry = e.type
+          icon.dataset.path = entryPath(e.name)
+          icon.innerHTML = (e.type === 'dir' ? TILE_DIR : TILE_FILE) + '<span class="label">' + esc(e.name) + '</span>'
+          fileIcons.appendChild(icon)
+        }
+      }
+      // 事件委托双击：打开桌面网格上的文件夹。
+      fileIcons.addEventListener('dblclick', (event) => {
+        const icon = event.target.closest('.desk-icon')
+        if (icon && icon.dataset.entry === 'dir') {
+          currentPath = decodeURIComponent(icon.dataset.path).split('/').filter(Boolean)
+          syncAll()
+        }
+      })
+
+      // ---------- 同步桌面 + 文件窗口 + DSH 文件夹 ----------
+      async function syncAll() {
+        document.getElementById('dshFolder').textContent = pathString() || '根目录'
+        deskPathEl.textContent = deskPathLabel()
+        backBtn.classList.toggle('hidden', currentPath.length === 0)
+        const p = pathString()
+        // 一次目录树请求同时供桌面网格和文件窗口使用。
+        const r = await api('/api/desktop/tree' + (p ? '?path=' + encodeURIComponent(p) : ''))
+        const entries = r.ok ? (r.body.entries || []) : []
+        renderDesktop(entries)
+        renderFiles(entries)
+      }
+      async function navigate(path) {
+        currentPath = path ? path.split('/').filter(Boolean) : []
+        await syncAll()
+      }
+      backBtn.addEventListener('click', () => {
+        currentPath = currentPath.slice(0, -1)
+        syncAll()
+      })
+
+      // ---------- 文件窗口（表格） ----------
+      const rows = document.getElementById('rows')
+      const breadcrumb = document.getElementById('breadcrumb')
+      function fmtSize(bytes) { if (!bytes) return '—'; const u = ['B','KB','MB','GB']; let i = 0, n = bytes; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ } return `${n.toFixed(i ? 1 : 0)} ${u[i]}` }
+      function renderBreadcrumb() {
+        const parts = ['<span class="crumb" data-path="">根</span>']
+        let acc = []
+        for (const seg of currentPath) {
+          acc.push(seg)
+          parts.push('<span class="sep">/</span><span class="crumb" data-path="' + encodeURIComponent(acc.join('/')) + '">' + esc(seg) + '</span>')
+        }
+        breadcrumb.innerHTML = parts.join('')
+      }
+      function renderFiles(entries) {
+        const p = pathString()
+        rows.innerHTML = ''
+        if (!entries.length) {
+          rows.innerHTML = '<tr class="empty"><td colspan="4">此文件夹为空</td></tr>'
+        } else {
+          if (p) rows.insertAdjacentHTML('beforeend', '<tr><td class="dir" data-up="1">..</td><td></td><td></td><td></td></tr>')
+          for (const e of entries) {
+            const href = e.type === 'dir' ? ` class="dir" data-path="${entryPath(e.name)}"` : ''
+            rows.insertAdjacentHTML('beforeend', `<tr><td${href}>${esc(e.name)}</td><td>${e.type === 'dir' ? '文件夹' : '文件'}</td><td>${fmtSize(e.size)}</td><td>${new Date(e.mtimeMs).toLocaleString()}</td></tr>`)
+          }
+        }
+        renderBreadcrumb()
+      }
+      // 表格主体的事件委托点击（文件夹 + 上级目录项）。
+      rows.addEventListener('click', (event) => {
+        const dir = event.target.closest('.dir[data-path]')
+        if (dir) { navigate(decodeURIComponent(dir.dataset.path)); return }
+        if (event.target.closest('.dir[data-up]')) {
+          currentPath = currentPath.slice(0, -1)
+          syncAll()
+        }
+      })
+      breadcrumb.addEventListener('click', (event) => {
+        const crumb = event.target.closest('.crumb')
+        if (crumb) navigate(crumb.dataset.path)
+      })
+
+      // ---------- 上传 / 新建文件 / 新建文件夹 ----------
+      const dialog = document.getElementById('newFileDialog')
+      const nfName = document.getElementById('nfName')
+      const nfType = document.getElementById('nfType')
+      const nfTitle = document.getElementById('nfTitle')
+      const nfOk = document.getElementById('nfOk')
+      function openDialog(type) {
+        nfType.value = type
+        nfTitle.textContent = type === 'dir' ? '新建文件夹' : '新建文件'
+        dialog.classList.remove('hidden')
+        nfName.value = ''
+        nfName.focus()
+      }
+      function closeDialog() { dialog.classList.add('hidden') }
+      function appAction(app) {
+        if (app === 'upload') document.getElementById('fileInput').click()
+        if (app === 'newfile') openDialog('file')
+      }
+      dialog.addEventListener('click', (event) => { if (event.target === dialog) closeDialog() })
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !dialog.classList.contains('hidden')) closeDialog()
+      })
+      document.getElementById('fileInput').addEventListener('change', async (event) => {
+        const file = event.target.files[0]
+        if (!file) return
+        const data = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result.split(',')[1])
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+        const r = await api('/api/fs/upload', { method: 'POST', body: JSON.stringify({ path: pathString(), name: file.name, data }) })
+        if (!r.ok) alert('上传失败：' + r.error)
+        event.target.value = ''
+        syncAll()
+      })
+      document.getElementById('newFolderBtn').addEventListener('click', () => openDialog('dir'))
+      nfOk.addEventListener('click', async () => {
+        const name = nfName.value.trim()
+        if (!name) { alert('请输入名称'); return }
+        const r = await api('/api/fs/create', { method: 'POST', body: JSON.stringify({ path: pathString(), name, type: nfType.value }) })
+        if (!r.ok) { alert('创建失败：' + r.error); return }
+        closeDialog()
+        syncAll()
+      })
+      nfName.addEventListener('keydown', (event) => { if (event.key === 'Enter') nfOk.click() })
+      document.getElementById('nfCancel').addEventListener('click', closeDialog)
+
+      // ---------- DSH 窗口 ----------
+      async function refreshDsh() {
+        const r = await api('/api/dsh/status')
+        if (!r.ok) return
+        const body = r.body
+        const running = body.running
+        const inst = body.instance
+        const crashed = !running && inst !== null && inst.status === 'crashed'
+        const label = running ? '运行中' : crashed ? '已崩溃' : '未运行'
+        const err = crashed && inst.lastError ? `（${inst.lastError.slice(0, 120)}）` : ''
+        const stateEl = document.getElementById('dshState')
+        stateEl.innerHTML = `<span class="dot ${running ? 'on' : 'off'}"></span> `
+        stateEl.appendChild(document.createTextNode(label + err))
+        // 只要存在被跟踪的实例（即使已崩溃）就显示「停止」按钮，
+        // 以便残留条目总能从界面上清除。
+        document.getElementById('stopBtn').classList.toggle('hidden', inst === null)
+        document.getElementById('openDshBtn').classList.toggle('hidden', !(running && body.url))
+        if (running && body.url) document.getElementById('openDshBtn').onclick = () => window.open(body.url, '_blank')
+      }
+      document.getElementById('launchBtn').addEventListener('click', async (event) => {
+        const btn = event.currentTarget
+        btn.disabled = true
+        btn.textContent = '启动中…'
+        const r = await api('/api/dsh/launch', { method: 'POST', body: JSON.stringify({ folder: pathString() }) })
+        btn.disabled = false
+        btn.textContent = '启动 DSH'
+        if (!r.ok) { alert(r.error === 'already_running' ? '已有运行中的 DSH，请先停止' : '启动失败：' + r.error); return }
+        await refreshDsh()
+      })
+      document.getElementById('stopBtn').addEventListener('click', async () => { await api('/api/dsh/stop', { method: 'POST' }); await refreshDsh() })
+
+      // 共享模型配置（管理员 → 选择接收的用户）
+      let sharedDismissed = false
+      async function refreshSharedConfig() {
+        const banner = document.getElementById('sharedConfigBanner')
+        try {
+          const res = await fetch('/api/me/shared-config')
+          if (!res.ok) { banner.classList.add('hidden'); return }
+          const body = await res.json()
+          const show = body.available && body.updateAvailable && !sharedDismissed
+          banner.classList.toggle('hidden', !show)
+          if (show) {
+            const names = body.providers.map((p) => p.displayName || p.route)
+            const list = names.length ? names.join('、') : '共享凭据'
+            document.getElementById('sharedConfigText').textContent =
+              (body.acceptedVersion === null ? '管理员提供了共享模型配置：' : '共享模型配置已更新：') + list
+          }
+        } catch { banner.classList.add('hidden') }
+      }
+      document.getElementById('sharedAcceptBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('sharedAcceptBtn')
+        btn.disabled = true
+        const res = await fetch('/api/me/shared-config/accept', { method: 'POST' })
+        btn.disabled = false
+        if (res.ok) { sharedDismissed = true; document.getElementById('sharedConfigBanner').classList.add('hidden') }
+        else alert('应用失败，请稍后重试')
+      })
+      document.getElementById('sharedDismissBtn').addEventListener('click', () => {
+        sharedDismissed = true
+        document.getElementById('sharedConfigBanner').classList.add('hidden')
+      })
+
+      let pluginCatalog = []
+      async function loadPlugins() {
+        const folder = pathString()
+        const r = await api('/api/plugins' + (folder ? '?folder=' + encodeURIComponent(folder) : ''))
+        if (!r.ok) return
+        const { plugins } = r.body
+        pluginCatalog = plugins
+        const list = document.getElementById('pluginList')
+        list.innerHTML = plugins.length === 0 ? '<p class="hint">暂无可用插件</p>' : ''
+        for (const plugin of plugins) {
+          const label = document.createElement('label')
+          label.className = 'plugin-item'
+          label.innerHTML = `<input type="checkbox" data-id="${esc(plugin.id)}" ${plugin.enabled ? 'checked' : ''}/> <strong>${esc(plugin.name)}</strong> — ${esc(plugin.description || '')}`
+          list.appendChild(label)
+        }
+      }
+      document.getElementById('managePluginsBtn').addEventListener('click', async () => {
+        const panel = document.getElementById('pluginPanel')
+        panel.classList.toggle('hidden')
+        if (!panel.classList.contains('hidden')) await loadPlugins()
+      })
+      document.getElementById('savePluginsBtn').addEventListener('click', async (event) => {
+        const btn = event.currentTarget
+        btn.disabled = true
+        const plugins = pluginCatalog.map((p) => ({ id: p.id, enabled: document.querySelector(`input[data-id="${CSS.escape(p.id)}"]`).checked }))
+        const r = await api('/api/plugins/select', { method: 'POST', body: JSON.stringify({ folder: pathString(), plugins }) })
+        btn.disabled = false
+        if (r.ok) alert('已保存')
+        else alert('保存失败：' + r.error)
+      })
+
+      // ---------- 管理台 ----------
+      async function loadUsers() {
+        const tbody = document.querySelector('#adminUsers tbody')
+        const r = await api('/api/admin/users')
+        if (!r.ok) { tbody.innerHTML = '<tr class="empty"><td colspan="4">加载失败</td></tr>'; return }
+        const users = r.body.users
+        if (!users.length) { tbody.innerHTML = '<tr class="empty"><td colspan="4">暂无用户</td></tr>'; return }
+        const badge = { admin: '管理员', pending: '待审核', active: '正常', disabled: '已禁用' }
+        tbody.innerHTML = ''
+        for (const u of users) {
+          const actions = u.role === 'pending'
+            ? `<button class="btn small ghost" data-act="approve" data-id="${esc(u.id)}">通过</button>`
+            : u.role === 'active' ? `<button class="btn small danger" data-act="disable" data-id="${esc(u.id)}">禁用</button>`
+            : u.role === 'disabled' ? `<button class="btn small ghost" data-act="enable" data-id="${esc(u.id)}">恢复</button>` : ''
+          tbody.insertAdjacentHTML('beforeend', `<tr><td>${esc(u.username)}</td><td><span class="badge ${esc(u.role)}">${badge[u.role] || esc(u.role)}</span></td><td>${new Date(u.createdAt).toLocaleString()}</td><td>${actions}</td></tr>`)
+        }
+      }
+      document.querySelector('#adminUsers tbody').addEventListener('click', async (event) => {
+        const btn = event.target.closest('button[data-act]')
+        if (!btn) return
+        const { act, id } = btn.dataset
+        const r = await api(`/api/admin/users/${id}/${act}`, { method: 'POST' })
+        if (r.ok) await loadUsers()
+        else alert('操作失败：' + r.error)
+      })
+
+      // ---------- 共享配置（管理员） ----------
+      const { loadShared } = initSharedConfigEditor(() => refreshSharedConfig())
+
+      // ---------- 时钟 ----------
+      function tick() { document.getElementById('clock').textContent = new Date().toLocaleString('zh-CN', { hour12: false }) }
+
+      // ---------- 初始化 ----------
+      document.getElementById('logoutBtn').addEventListener('click', async () => { await fetch('/api/auth/logout', { method: 'POST' }); location.href = '/login.html' })
+      tick(); setInterval(tick, 1000)
+
+      ;(async function init() {
+        user = await me()
+        if (!user) { location.href = '/login.html'; return }
+        document.getElementById('who').textContent = user.username
+        const roleLabel = user.role === 'admin' ? '管理员' : user.role === 'pending' ? '待审核' : '正常'
+        document.getElementById('roleBadge').textContent = roleLabel
+        document.getElementById('roleBadge').classList.remove('hidden')
+        if (user.role === 'admin') {
+          document.getElementById('adminIcon').classList.remove('hidden')
+          document.getElementById('adminTask').classList.remove('hidden')
+          document.getElementById('sharedIcon').classList.remove('hidden')
+          document.getElementById('sharedTask').classList.remove('hidden')
+          await Promise.all([loadUsers(), loadShared()])
+        }
+        await syncAll()
+        await refreshDsh()
+        await refreshSharedConfig()
+        // 轮询以便异步启动失败（启动后立即崩溃）能及时显现 —
+        // 仅在页面和 DSH 窗口实际可见时进行。
+        setInterval(() => {
+          if (!document.hidden && isOpen('dsh')) refreshDsh()
+        }, 5000)
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden && isOpen('dsh')) refreshDsh()
+        })
+      })()
+    </script>
+  </body>
+</html>

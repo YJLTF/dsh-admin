@@ -1,0 +1,20 @@
+node_modules/
+lib/
+data/
+dist-web/
+*.log
+*.db
+*.db-wal
+*.db-shm
+*.local.db
+.DS_Store
+
+# 内部开发文档（不公开）
+设计初稿.md
+docs/security-model.md
+docs/performance.md
+docs/roadmap.md
+公众号文稿.md
+宣传报告.md
+公众号文稿.txt
+待办.md
