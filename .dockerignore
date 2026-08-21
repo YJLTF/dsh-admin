@@ -1,9 +1,43 @@
-node_modules
-lib
+# 镜像构建只需要：package*.json、tsconfig.json、src/、web/、docker/entrypoint.sh。
+# 其余全部排除 —— 缩小构建上下文，并阻止密钥与本地产物进入镜像。
+
+# 版本控制 / 开发工具
 .git
-npm-debug.log*
+.gitignore
+.gitattributes
+.opencode
+.vscode
+.idea
+AGENTS.md
+
+# 依赖与构建产物（镜像内重新 npm ci + tsc；dsh 装在 /opt/dsh-image）
+**/node_modules
+lib
+dist-web
+*.tsbuildinfo
+
+# 文档与开发脚本（运行时不需要）
 *.md
 docs
 scripts
-.opencode
-AGENTS.md
+docker-compose*.yml
+
+# 本地数据 / 数据库 / 日志（绝不能进入镜像）
+data
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# 环境变量与密钥
+.env
+.env.*
+
+# 内网更新工作流产物（bind mount 目录与打包产物）
+dsh-cli
+dsh-data
+*.tgz
+
+# 操作系统杂项
+.DS_Store
+Thumbs.db

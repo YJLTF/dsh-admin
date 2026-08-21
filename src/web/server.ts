@@ -50,6 +50,21 @@ export async function buildServer(config: ServerConfig): Promise<FastifyInstance
     bodyLimit: config.maxUploadBytes,
   })
 
+  // 空 JSON 体（无 body 却带 application/json 的 POST，如前端的
+  // /api/dsh/stop）按 {} 处理，而非抛 FST_ERR_CTP_EMPTY_JSON_BODY。
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+    if (body === '' || body === undefined) {
+      done(null, {})
+      return
+    }
+    try {
+      done(null, JSON.parse(body as string))
+    } catch (err) {
+      ;(err as Error & { statusCode?: number }).statusCode = 400
+      done(err as Error, undefined)
+    }
+  })
+
   app.decorate('db', db)
   app.decorate('config', config)
   app.decorate('supervisor', supervisor)

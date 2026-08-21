@@ -57,7 +57,12 @@ try {
   assert(r.status === 200, '启动成功')
   const firstMainId = r.body.instance.id
 
-  r = await json('/api/dsh/status', { cookie })
+  // 主 DSH 在端口就绪后才进入 running —— 轮询（同下方的重启轮询）。
+  for (let i = 0; i < 100; i++) {
+    r = await json('/api/dsh/status', { cookie })
+    if (r.body.instance?.status === 'running') break
+    await sleep(100)
+  }
   console.log('状态         -> 主 DSH:', r.body.instance?.status, '看门狗:', r.body.watchdog)
   assert(r.body.instance?.status === 'running' && r.body.watchdog === null, '只有主 DSH，无常驻看门狗')
 

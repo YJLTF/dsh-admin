@@ -204,7 +204,12 @@
         try {
           const res = await fetch(path, {
                 ...options,
-                headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+                // 仅在携带请求体时声明 JSON 类型；空体 + application/json
+                // 会被服务器以 400 拒绝（如 stop）。
+                headers: {
+                  ...(options.body !== undefined ? { 'content-type': 'application/json' } : {}),
+                  ...(options.headers || {}),
+                },
               })
           if (!res.ok) {
             const body = await res.json().catch(() => ({}))
@@ -379,32 +384,66 @@
       document.getElementById('nfCancel').addEventListener('click', closeDialog)
 
       // ---------- DSH 窗口 ----------
-      async function refreshDsh() {
-        const r = await api('/api/dsh/status')
-        if (!r.ok) return
-        const body = r.body
-        const running = body.running
+      // 从 status 响应渲染状态行 + 按钮组；返回当前状态
+      // （stopped|starting|running|crashed）。starting 期间启动按钮保持
+      // 禁用并显示"启动中…"，仅当端口探测确认就绪（running）后才出现
+      // 「打开 DSH」。
+      function renderDshState(body) {
         const inst = body.instance
-        const crashed = !running && inst !== null && inst.status === 'crashed'
-        const label = running ? '运行中' : crashed ? '已崩溃' : '未运行'
+        const st = inst === null ? 'stopped' : inst.status
+        const crashed = st === 'crashed'
+        const label = st === 'starting' ? '启动中…（等待 DSH 服务就绪）' : st === 'running' ? '运行中' : crashed ? '已崩溃' : '未运行'
         const err = crashed && inst.lastError ? `（${inst.lastError.slice(0, 120)}）` : ''
         const stateEl = document.getElementById('dshState')
-        stateEl.innerHTML = `<span class="dot ${running ? 'on' : 'off'}"></span> `
+        const dot = st === 'running' ? 'on' : st === 'starting' ? 'starting' : 'off'
+        stateEl.innerHTML = `<span class="dot ${dot}"></span> `
         stateEl.appendChild(document.createTextNode(label + err))
         // 只要存在被跟踪的实例（即使已崩溃）就显示「停止」按钮，
         // 以便残留条目总能从界面上清除。
         document.getElementById('stopBtn').classList.toggle('hidden', inst === null)
-        document.getElementById('openDshBtn').classList.toggle('hidden', !(running && body.url))
-        if (running && body.url) document.getElementById('openDshBtn').onclick = () => window.open(body.url, '_blank')
+        document.getElementById('openDshBtn').classList.toggle('hidden', !(st === 'running' && body.url))
+        if (st === 'running' && body.url) document.getElementById('openDshBtn').onclick = () => window.open(body.url, '_blank')
+        const launchBtn = document.getElementById('launchBtn')
+        launchBtn.disabled = st === 'starting'
+        launchBtn.textContent = st === 'starting' ? '启动中…' : '启动 DSH'
+        return st
+      }
+      async function refreshDsh() {
+        const r = await api('/api/dsh/status')
+        if (!r.ok) return
+        if (renderDshState(r.body) === 'starting') pollDshWhileStarting()
+      }
+      // starting 期间 1s 快轮询（后台 5s 轮询太慢），状态离开 starting 即停。
+      let dshStartingPoll = false
+      function pollDshWhileStarting() {
+        if (dshStartingPoll) return
+        dshStartingPoll = true
+        void (async () => {
+          try {
+            for (;;) {
+              await new Promise((resolve) => setTimeout(resolve, 1000))
+              const r = await api('/api/dsh/status')
+              if (!r.ok) continue
+              if (renderDshState(r.body) !== 'starting') return
+            }
+          } finally {
+            dshStartingPoll = false
+          }
+        })()
       }
       document.getElementById('launchBtn').addEventListener('click', async (event) => {
         const btn = event.currentTarget
         btn.disabled = true
         btn.textContent = '启动中…'
         const r = await api('/api/dsh/launch', { method: 'POST', body: JSON.stringify({ folder: pathString() }) })
-        btn.disabled = false
-        btn.textContent = '启动 DSH'
-        if (!r.ok) { alert(r.error === 'already_running' ? '已有运行中的 DSH，请先停止' : '启动失败：' + r.error); return }
+        if (!r.ok) {
+          btn.disabled = false
+          btn.textContent = '启动 DSH'
+          alert(r.error === 'already_running' ? '已有运行中的 DSH，请先停止' : '启动失败：' + r.error)
+          return
+        }
+        // 状态行的 starting 渲染 + 快轮询接管；按钮由 renderDshState 在
+        // 就绪/失败时恢复。
         await refreshDsh()
       })
       document.getElementById('stopBtn').addEventListener('click', async () => { await api('/api/dsh/stop', { method: 'POST' }); await refreshDsh() })

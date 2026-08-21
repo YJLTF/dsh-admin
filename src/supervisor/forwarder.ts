@@ -7,15 +7,26 @@
  * （DSH 客户端插件用它生成 RPC id，会直接崩溃），而且 DSH 的信任栅栏
  * 会对任何携带浏览器 Origin 的请求返回 403。本代理剥除 Origin，并向
  * HTML 响应注入 randomUUID 垫片。
+ *
+ * 访问令牌：已发布的端口在内网上对任何主机可达，因此每个实例持有
+ * 一个随机令牌 —— 没有它（首次导航携带 `?dsh_token=`，之后是
+ * `dshfwd` cookie，WS 升级同样校验）的请求一律 401。这把"谁能用
+ * 这个 DSH"重新关回 dsh-admin 的登录/授权门后。
  * @module dsh-admin/supervisor/forwarder
  */
 
 import type { IncomingHttpHeaders, Server as HttpServer } from 'node:http'
 import { createServer, request as httpRequest } from 'node:http'
 import { connect, type Socket } from 'node:net'
+import { createHash, timingSafeEqual } from 'node:crypto'
 import { Agent } from 'node:http'
 
 const agent = new Agent({ keepAlive: true, maxSockets: 16 })
+
+/** 首次导航携带令牌的查询参数名（也在代理前被剥除，不外泄给上游）。 */
+const TOKEN_QUERY = 'dsh_token'
+/** 校验通过后颁发给浏览器的 cookie 名（HttpOnly；随实例令牌轮换）。 */
+const TOKEN_COOKIE = 'dshfwd'
 
 /** 浏览器信任栅栏：被代理的请求不得携带的头。 */
 const STRIP_HEADERS = new Set([
@@ -87,10 +98,79 @@ function buildUpstreamHeaders(headers: IncomingHttpHeaders, port: number): Recor
   return out
 }
 
-function relayUpgrade(req: import('node:http').IncomingMessage, socket: import('node:stream').Duplex, head: Buffer, port: number): void {
+/** 常数时间令牌比较（先哈希以对齐长度，不泄漏比较耗时或长度信息）。 */
+function tokenEquals(a: string, b: string): boolean {
+  const ha = createHash('sha256').update(a).digest()
+  const hb = createHash('sha256').update(b).digest()
+  return timingSafeEqual(ha, hb)
+}
+
+/** 从请求 URL 的查询串中提取 `dsh_token`（base64url 值不含 '='，无需解码）。 */
+function queryToken(url: string | undefined): string | undefined {
+  const query = (url ?? '').split('?')[1]
+  if (query === undefined) return undefined
+  for (const pair of query.split('&')) {
+    const eq = pair.indexOf('=')
+    if (eq !== -1 && pair.slice(0, eq) === TOKEN_QUERY) return pair.slice(eq + 1)
+  }
+  return undefined
+}
+
+/** 从代理 URL 中剥除令牌查询参数（保留其余参数）。 */
+function stripTokenParam(url: string): string {
+  const qi = url.indexOf('?')
+  if (qi === -1) return url
+  const kept = url
+    .slice(qi + 1)
+    .split('&')
+    .filter((pair) => pair.split('=')[0] !== TOKEN_QUERY)
+    .join('&')
+  return kept === '' ? url.slice(0, qi) : `${url.slice(0, qi + 1)}${kept}`
+}
+
+interface TokenCheck {
+  ok: boolean
+  /** 通过查询参数验证通过 —— 响应应同时种下 cookie。 */
+  viaQuery: boolean
+}
+
+/** 校验请求的令牌：查询参数（首次导航）或 cookie（后续请求/WS 升级）。
+ * 查询参数过期（例如重启后的旧书签）时回退 cookie，两者皆无/皆错才拒绝。 */
+function checkToken(req: import('node:http').IncomingMessage, token: string): TokenCheck {
+  const q = queryToken(req.url)
+  if (q !== undefined && tokenEquals(q, token)) return { ok: true, viaQuery: true }
+  const cookie = parseCookieValue(req.headers.cookie, TOKEN_COOKIE)
+  if (cookie !== undefined && tokenEquals(cookie, token)) return { ok: true, viaQuery: false }
+  return { ok: false, viaQuery: false }
+}
+
+/** 从 `Cookie` 头中提取指定名称的值（与 web/auth 的 parseCookie 同构，
+ * 但转发器不依赖 Fastify 层，这里内联一份最小实现）。 */
+function parseCookieValue(header: string | undefined, name: string): string | undefined {
+  if (!header) return undefined
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=')
+    if (idx !== -1 && part.slice(0, idx).trim() === name) return part.slice(idx + 1).trim()
+  }
+  return undefined
+}
+
+/** 种下转发器 cookie（HttpOnly；不设 Max-Age —— 浏览器会话级即可，
+ * 实例重启会轮换令牌并使旧 cookie 失效）。 */
+function tokenCookie(token: string): string {
+  return `${TOKEN_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/`
+}
+
+function relayUpgrade(req: import('node:http').IncomingMessage, socket: import('node:stream').Duplex, head: Buffer, port: number, token: string): void {
+  if (!checkToken(req, token).ok) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
+    socket.destroy()
+    return
+  }
   const upstream = connect({ host: '127.0.0.1', port })
   upstream.on('connect', () => {
-    const lines = [`${req.method} ${req.url} HTTP/${req.httpVersion}`]
+    const path = stripTokenParam(req.url ?? '/')
+    const lines = [`${req.method} ${path} HTTP/${req.httpVersion}`]
     for (let i = 0; i < req.rawHeaders.length; i += 2) {
       const name = (req.rawHeaders[i] ?? '').toLowerCase()
       if (name === 'host' || STRIP_HEADERS.has(name)) continue
@@ -108,20 +188,31 @@ function relayUpgrade(req: import('node:http').IncomingMessage, socket: import('
 
 /**
  * 为一个子 DSH 启动转发器。监听绑定完成后 resolve。
+ * 所有请求（HTTP 与 WS 升级）必须携带 `token` —— 查询参数或 cookie。
  */
-export function startForwarder(lanIp: string, port: number): Promise<HttpServer> {
+export function startForwarder(lanIp: string, port: number, token: string): Promise<HttpServer> {
   const server = createServer((req, res) => {
+    const check = checkToken(req, token)
+    if (!check.ok) {
+      res.writeHead(401, { 'content-type': 'text/plain; charset=utf-8' })
+      res.end('unauthorized')
+      return
+    }
+    // 首次导航（令牌在查询串中）：种 cookie 供后续请求与 WS 升级使用，
+    // 并把令牌从代理路径中剥除（不外泄给上游 DSH）。
+    const extraHeaders = check.viaQuery ? { 'set-cookie': tokenCookie(token) } : {}
+    const path = stripTokenParam(req.url ?? '/')
     const upstream = httpRequest(
       {
         host: '127.0.0.1',
         port,
-        path: req.url,
+        path,
         method: req.method,
         agent,
         headers: buildUpstreamHeaders(req.headers, port),
       },
       (upRes) => {
-        const headers = { ...upRes.headers }
+        const headers = { ...upRes.headers, ...extraHeaders }
         const contentType = String(headers['content-type'] ?? '')
         const isHtml = contentType.includes('text/html')
         const rewriteJs = contentType.includes('javascript') && isConnectionClient(req.url)
@@ -146,7 +237,7 @@ export function startForwarder(lanIp: string, port: number): Promise<HttpServer>
     upstream.on('error', () => res.destroy())
     req.pipe(upstream)
   })
-  server.on('upgrade', (req, socket, head) => relayUpgrade(req, socket, head, port))
+  server.on('upgrade', (req, socket, head) => relayUpgrade(req, socket, head, port, token))
   return new Promise((resolve, reject) => {
     const onError = (err: Error) => {
       // 运行期的监听错误绝不能调用已结算的 reject。

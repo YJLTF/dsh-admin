@@ -236,6 +236,8 @@ table.files .dir:hover { text-decoration: underline; }
 .dot { width: 9px; height: 9px; border-radius: 50%; }
 .dot.on { background: var(--ok); box-shadow: 0 0 0 4px rgba(31,181,106,0.15); }
 .dot.off { background: var(--ink-soft); }
+.dot.starting { background: #f5a623; box-shadow: 0 0 0 4px rgba(245,166,35,0.15); animation: dot-pulse 1s ease-in-out infinite; }
+@keyframes dot-pulse { 50% { opacity: 0.35; } }
 .row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .section-label { font-size: 12px; color: var(--ink-soft); font-weight: 600; margin: 16px 0 8px; }
 .plugin-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; font-size: 13.5px; }

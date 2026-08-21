@@ -56,9 +56,14 @@ try {
   // dev 服务绑定回环端口 → url 必须是子进程自己的端口。
   assert(url === `http://127.0.0.1:${r.body.instance.port}/`, 'dev url 是子进程的回环端口')
 
-  r = await json('/api/dsh/status', { cookie })
+  // 子进程异步绑定端口，编排器在端口探测通过后才置 running —— 轮询。
+  for (let i = 0; i < 100; i++) {
+    r = await json('/api/dsh/status', { cookie })
+    if (r.body.running === true) break
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
   console.log('状态    ->', r.status, r.body)
-  assert(r.body.running === true, '启动后处于运行状态')
+  assert(r.body.running === true, '启动后处于运行状态（端口就绪后）')
 
   // 子进程异步绑定端口；轮询直到它响应。
   let childText
@@ -119,8 +124,13 @@ try {
       body: JSON.stringify({ folder: 'proj' }),
     })
     const body2 = await res2.json()
-    console.log('内网    ->', res2.status, body2.url, '端口', body2.instance.port)
-    assert(res2.status === 200 && body2.url === `http://192.168.1.100:${body2.instance.port}/`, 'publicHost 的 url')
+    console.log('内网    ->', res2.status, '端口', body2.instance.port)
+    assert(
+      res2.status === 200 && body2.url.startsWith(`http://192.168.1.100:${body2.instance.port}/?dsh_token=`),
+      'publicHost 的 url 携带访问令牌',
+    )
+    const fwdToken = body2.url.split('?dsh_token=')[1]
+    assert(fwdToken !== undefined && fwdToken.length >= 32, '令牌为足够长的随机串')
     assert(body2.instance.port >= 41000 && body2.instance.port <= 41010, '子进程端口在配置范围内')
 
     // 转发器（绑定本机真实 IP）代理时必须剥掉 Origin 头，
@@ -135,21 +145,30 @@ try {
         console.log('经转发器 ->', fwdBase)
         // 转发器在启动后异步绑定；稍等片刻。
         await new Promise((resolve) => setTimeout(resolve, 500))
-        const page = await fetch(fwdBase + '/page.html', { headers: { origin: fwdBase } }).catch((e) => {
+        // 无令牌的请求必须被拒绝（内网直连不能绕过登录）。
+        const bare = await fetch(fwdBase + '/hello', { headers: { origin: fwdBase } }).catch(() => null)
+        assert(bare !== null && bare.status === 401, '无令牌的转发器请求被 401 拒绝')
+        const wrong = await fetch(fwdBase + '/hello?dsh_token=bogus', { headers: { origin: fwdBase } }).catch(() => null)
+        assert(wrong !== null && wrong.status === 401, '错误令牌的转发器请求被 401 拒绝')
+        const page = await fetch(fwdBase + `/page.html?dsh_token=${fwdToken}`, { headers: { origin: fwdBase } }).catch((e) => {
           console.log('转发器请求错误 ->', e.cause?.code ?? e.message)
           return null
         })
-        assert(page !== null && page.status === 200, '转发器代理请求')
+        assert(page !== null && page.status === 200, '转发器代理携带令牌的请求')
+        assert((page.headers.get('set-cookie') ?? '').startsWith('dshfwd='), '令牌导航种下 dshfwd cookie')
         const html = page === null ? '' : await page.text()
         assert(html.includes('crypto.randomUUID'), '转发器注入 randomUUID polyfill')
         assert(html.includes('<title>fake</title>'), '转发器保留原始 HTML 主体')
-        const gate = await fetch(fwdBase + '/plugins/@deepseek-ai/dsh-client-connection/client.js?rev=abc', {
+        const cookieFwd = (page.headers.get('set-cookie') ?? '').split(';')[0]
+        const viaCookie = await fetch(fwdBase + '/hello', { headers: { origin: fwdBase, cookie: cookieFwd } }).catch(() => null)
+        assert(viaCookie !== null && viaCookie.status === 200, 'cookie 可通过后续请求校验')
+        const gate = await fetch(fwdBase + `/plugins/@deepseek-ai/dsh-client-connection/client.js?rev=abc&dsh_token=${fwdToken}`, {
           headers: { origin: fwdBase },
         }).catch(() => null)
         assert(gate !== null && gate.status === 200, '转发器转发插件脚本')
         const gateJs = gate === null ? '' : await gate.text()
         assert(gateJs.includes('(true) ? "host"'), '转发器把回环门改写为 true')
-        const probe = await fetch(fwdBase + '/hello', { headers: { origin: fwdBase } }).catch(() => null)
+        const probe = await fetch(fwdBase + `/hello?dsh_token=${fwdToken}`, { headers: { origin: fwdBase } }).catch(() => null)
         assert(probe !== null && probe.status === 200, '转发器原样转发非 HTML 响应')
       }
     }

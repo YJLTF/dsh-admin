@@ -13,7 +13,7 @@ DSH 本身是单用户本地工具，没有认证、没有多租户隔离、Web 
 - **登录与审核**：管理员先行（`bootstrap-admin`），用户注册后需管理员审核通过；独立管理台 UI。
 - **每用户隔离的 DSH 环境**：主 DSH 负责正常工作；崩溃时**按需拉起一次守护 DSH** 修复并自动重启；装插件重启时守护执行主 DSH 给出的 post-restart 命令。
 - **登录桌面**：文件浏览 / 建文件夹 / 上传；按文件夹启动 DSH；每文件夹独立勾选启用的插件（自动检测该用户 profile 中已安装的插件，持久化并注入 cordis patch）。
-- **内网直连访问**：`DSH_ADMIN_PUBLIC_HOST=<内网IP>` + 固定子 DSH 端口段，Docker 直接发布端口；每实例内置 forwarder（剥 Origin / 注入 `randomUUID` polyfill / 改写 loopback 门）保证非安全上下文可用。
+- **内网直连访问**：`DSH_ADMIN_PUBLIC_HOST=<内网IP>` + 固定子 DSH 端口段，Docker 直接发布端口；每实例内置 forwarder（剥 Origin / 注入 `randomUUID` polyfill / 改写 loopback 门 / per-instance 访问令牌门禁）保证非安全上下文可用且不绕过登录。
 - **共享模型配置**：管理员统一维护提供方与凭据，用户在桌面一键接收，叶子级合并进自己的 `settings.yaml` / `.credentials.yaml`。
 - **硬隔离**（Linux）：每用户独立 OS 账号（`setuid` 降权），`0700` 目录真正隔离跨用户读。
 
@@ -48,7 +48,7 @@ node lib/cli.js --port 3080 --db ./dev.local.db
 | `DSH_ADMIN_DSH_BIN` | `dsh` | 子 DSH 启动命令；支持带双引号的命令串（Windows 用 `node "<dsh 路径>"`，见 troubleshooting） |
 | `DSH_ADMIN_ISOLATION_MODE` | `soft` | `soft` 软隔离 / `account` 账号级硬隔离（Linux，需 root） |
 | `DSH_ADMIN_BASE_UID` | `100000` | 账号级隔离的 uid 基数 |
-| `DSH_ADMIN_PUBLIC_HOST` | 空 | 内网 IP；设置后 DSH 链接生成为 `http://<内网IP>:<子端口>/` |
+| `DSH_ADMIN_PUBLIC_HOST` | 空 | 内网 IP；设置后 DSH 链接生成为 `http://<内网IP>:<子端口>/?dsh_token=<实例令牌>` |
 | `DSH_ADMIN_DSH_PORT_MIN/MAX` | `0` | 子 DSH 端口段（Docker 端口映射范围需一致） |
 | `DSH_ADMIN_PORT_GUARD` | `false` | 回环端口守卫（iptables OUTPUT owner-match，Linux + root，防跨用户直连子 DSH） |
 | `DSH_ADMIN_TRUST_PROXY` | `false` | 仅当部署在自控反向代理后设 `true`（否则 `X-Forwarded-For` 可伪造 rate-limit 键）；也可传代理 CIDR 列表 |

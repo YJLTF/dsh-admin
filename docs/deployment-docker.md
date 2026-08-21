@@ -27,7 +27,11 @@
    失败」）。`location.hostname` 在浏览器里不可覆写（LegacyUnforgeable），因此
    forwarder 对 `dsh-client-connection` 的 client.js 做字节级改写，把
    `isLoopbackHostname(pageLocation.hostname)` 替换为 `(true)`。转发路径本身
-   就是回环（浏览器 → forwarder → 子 DSH 的 127.0.0.1），原安全不变量仍成立。
+   就是回环（浏览器 → forwarder → 子 DSH 的 127.0.0.1），原安全不变量仍成立；
+4. **访问令牌门禁** —— 已发布的端口在内网对任何主机可达，因此每个实例持有
+   随机令牌（随每次启动/重启轮换）：编排服务返回的链接携带 `?dsh_token=`，
+   首次导航后由 HttpOnly cookie（`dshfwd`）接管，HTTP 与 WS 升级同样校验，
+   无令牌请求一律 401。这把「谁能用这个 DSH」关回 dsh-admin 的登录/授权门后。
 
 > ⚠️ 版本耦合提醒：第 3 点的正则针对当前 DSH 版本的调用形态；DSH 升级后若改写
 > 失效，症状会回归（配置模型报 loopback 错误），需同步更新
@@ -35,11 +39,10 @@
 
 ## ⚠️ 安全须知（务必阅读）
 
-**直连子 DSH 端口会绕过编排服务的登录认证。** 子 DSH 自身没有鉴权——编排服务的
-反向代理才是认证边界。内网模式下，局域网内任何人扫描 `40000+` 端口即可直接使用
-他人正在运行的 DSH（包括消耗其配置的 DeepSeek API key）。
-
-仅在「内网全部可达主机可信」的前提下使用此模式。
+子 DSH 端口在内网可达，但**不会绕过编排服务的登录认证**：forwarder 对每个
+实例做令牌门禁（见上第 4 点），无令牌的直连请求一律 401。令牌只通过已认证的
+API（launch/restart/status 返回的 url）交付给属主，且随实例重启轮换 —— 局域网
+内扫描 `40000+` 端口拿不到有效令牌，无法使用他人的 DSH。
 
 另：soft 隔离模式下容器内所有用户的子 DSH 以同一 uid（root）运行。要更强的隔离，
 可用 `account` 模式（容器需 root + `setpriv`，配 `DSH_ADMIN_BASE_UID`）。
@@ -64,16 +67,38 @@ docker compose exec dsh-admin node lib/cli.js bootstrap-admin \
 
 ## 数据持久化
 
-命名卷 `dsh-data`（容器内 `/var/lib/dsh-admin`）存放 SQLite 数据库与
-每用户 home/workspace。**备份它**。
+bind mount `./dsh-data`（容器内 `/var/lib/dsh-admin`）存放 SQLite 数据库与
+每用户 home/workspace。**备份它**。`./dsh-cli`（容器内 `/opt/dsh`）是 dsh CLI
+的运行时安装位置（见下方升级）。
 
 ## 升级 / 日常运维
 
 ```sh
-docker compose up -d --build          # 升级镜像（数据在卷中不受影响）
+docker compose up -d --build          # 升级镜像（数据在 bind mount 中不受影响）
 docker compose logs -f                # 日志（含子 DSH stdout/stderr）
 docker compose restart                # 注意：重启会停掉所有运行中的子 DSH
 ```
+
+### 只更新 dsh CLI（不重建镜像）
+
+镜像内置一份基线 dsh（`/opt/dsh-image`），首次启动时播种到 `./dsh-cli`。之后
+更新 dsh 无需重建 / 重传镜像：
+
+1. 有网机器上打包（linux 平台依赖；持久缓存卷 `dsh-npm-cache` 让重复构建
+   只剩 tar 压缩耗时）：
+   ```powershell
+   powershell -File scripts\pack-dsh.ps1 -Version <npm 版本号|latest>
+   ```
+2. 把 `dsh-cli.tgz` 传到服务器上 docker-compose.yml 同级目录，执行：
+   ```sh
+   rm -rf dsh-cli/node_modules && tar -xzf dsh-cli.tgz -C dsh-cli
+   docker compose restart
+   ```
+3. 清空 `dsh-cli/` 再重启即可回退到镜像内置基线版本。
+
+注意：**不能**直接拷贝 Windows 全局安装的 dsh 包 —— 原生依赖（sharp /
+node-pty / node-addon-require-builtin）是平台相关的，Windows 装的是 win32
+二进制，容器内加载即失败。
 
 ## 端口规划核对清单
 

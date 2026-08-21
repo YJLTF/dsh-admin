@@ -1,20 +1,32 @@
+# ---- 构建产物 ----
 node_modules/
 lib/
-data/
 dist-web/
-*.log
+*.tsbuildinfo
+
+# ---- 运行时本地数据（SQLite / 密钥 / 用户目录）----
+data/
 *.db
 *.db-wal
 *.db-shm
-*.local.db
-.DS_Store
 
-# 内部开发文档（不公开）
-设计初稿.md
-docs/security-model.md
-docs/performance.md
-docs/roadmap.md
-公众号文稿.md
-宣传报告.md
-公众号文稿.txt
-待办.md
+# ---- 日志 ----
+*.log
+
+# ---- 内网更新工作流产物（scripts/pack-dsh.ps1）----
+dsh-cli/
+*.tgz
+dsh-data/
+
+# ---- 环境变量与密钥 ----
+.env
+.env.*
+!.env.example
+
+# ---- 编辑器 / 操作系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+*.tar

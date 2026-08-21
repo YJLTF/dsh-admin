@@ -11,7 +11,7 @@
   ps aux | grep dsh            # 有没有子进程
   ss -tulpn | grep <端口>      # 有没有监听
   ```
-- **冷启动**：真实 DSH 冷启动 ~4s（源码启动）。编排服务在 `spawn` 事件就标「running」，但端口要等插件树 boot 完才绑。等 10 秒再开 / 再查 `ss`。
+- **冷启动**：真实 DSH 冷启动 ~4s（源码启动）。状态在子进程端口真正接受连接后才转「running」（此前为「starting」，UI 显示"启动中…"），前端会 1s 轮询直到就绪。若长时间停在「starting」，再查 `ss` / 子进程 stderr。
 - **spawn 即崩**：看编排服务终端的子进程 stderr（stderr 会被 pipe 过去）。
 
 ## 启动 DSH 报 `spawn dsh ENOENT`

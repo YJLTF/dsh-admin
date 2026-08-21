@@ -10,8 +10,9 @@
  */
 
 import { spawn, type ChildProcess, type StdioOptions } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { networkInterfaces } from 'node:os'
+import { connect } from 'node:net'
 import { join } from 'node:path'
 import type { Server as HttpServer } from 'node:http'
 import type { ServerConfig } from '../config.js'
@@ -41,6 +42,27 @@ export interface Instance {
   exitCode?: number
   lastError?: string
   patchPath?: string
+  /** 内网模式下转发器的访问令牌；随每次（重）拉起轮换。
+   * 仅通过已认证的 API（launch/restart/status 返回的 url）交付给属主。 */
+  token?: string
+}
+
+/** 就绪探测参数：间隔与最长探测时长（超时后保持 starting，
+ * 不臆造崩溃 —— 进程活着但未监听是可见的、可停止的状态）。 */
+const READY_PROBE_INTERVAL_MS = 150
+const READY_PROBE_TIMEOUT_MS = 60_000
+
+/** 子进程的环回监听是否已接受 TCP 连接（握手成功即就绪）。 */
+function probePort(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect({ host: '127.0.0.1', port })
+    const done = (ok: boolean): void => {
+      socket.destroy()
+      resolve(ok)
+    }
+    socket.once('connect', () => done(true))
+    socket.once('error', () => done(false))
+  })
 }
 
 /** 当某用户已有一个运行中的主 DSH 时抛出。 */
@@ -163,6 +185,9 @@ export class Supervisor {
 
   private async spawnInstance(userId: string, role: InstanceRole, folder: string, patchPath?: string): Promise<Instance> {
     const port = role === 'main' ? await findFreePort(this.config.dshPortMin, this.config.dshPortMax) : undefined
+    // 令牌与端口同生命周期：崩溃重启（新端口）自然换新令牌；
+    // 手动重启也换新 —— 旧链接立即作废，无残留窗口。
+    const token = role === 'main' && this.config.publicHost !== '' ? randomBytes(32).toString('base64url') : undefined
     const instance: Instance = {
       id: randomUUID(),
       userId,
@@ -171,6 +196,7 @@ export class Supervisor {
       port,
       status: 'starting',
       patchPath,
+      token,
     }
     const map = role === 'main' ? this.mains : this.watchdogs
     map.set(userId, instance)
@@ -201,15 +227,15 @@ export class Supervisor {
 
     const child = this.spawnAsUser(userId, command, [...args, ...launchArgs], { cwd: folder, env })
     this.trackChild(userId, instance, child)
-    if (role === 'main' && port !== undefined) this.syncForwarder(userId, port)
+    if (role === 'main' && port !== undefined && token !== undefined) this.syncForwarder(userId, port, token)
     return instance
   }
 
   /** 内网模式下，把用户已发布的端口（重新）指向子进程的环回监听
-   * （HTTP/WS 反向代理；剥除 Origin + 注入 randomUUID 垫片 ——
-   * 见 forwarder.ts）。崩溃重启会换一个新端口，因此要替换任何
+   * （HTTP/WS 反向代理；剥除 Origin + 注入 randomUUID 垫片 + 访问令牌
+   * 门禁 —— 见 forwarder.ts）。崩溃重启会换一个新端口，因此要替换任何
    * 过期残留的转发器。 */
-  private syncForwarder(userId: string, port: number): void {
+  private syncForwarder(userId: string, port: number, token: string): void {
     if (this.config.publicHost === '') return
     if (this.lanIp === null) this.lanIp = firstLanIpv4()
     if (this.lanIp === null) {
@@ -217,7 +243,7 @@ export class Supervisor {
       return
     }
     this.killForwarder(userId)
-    void startForwarder(this.lanIp, port)
+    void startForwarder(this.lanIp, port, token)
       .then((server) => this.forwarders.set(userId, server))
       .catch((err: unknown) => {
         // 转发器失败绝不能拖垮子进程；直连链接随之失效。
@@ -254,19 +280,26 @@ export class Supervisor {
   private trackChild(userId: string, instance: Instance, child: ChildProcess): void {
     this.children.set(instance.id, child)
     child.on('spawn', () => {
-      instance.status = 'running'
       instance.pid = child.pid ?? undefined
-      if (instance.role === 'main' && instance.port !== undefined && this.portGuard !== undefined) {
-        try {
-          this.portGuard.install(instance.port)
-        } catch (error) {
-          // 故障即关闭（fail closed）：没有端口守卫，同租户本地用户就能
-          // 直接连到这个 DSH 的环回 RPC。杀掉刚拉起的子进程并把实例
-          // 标记为 crashed，而不是在无守卫状态下继续服务。
-          instance.status = 'crashed'
-          instance.lastError = error instanceof Error ? error.message : String(error)
-          child.kill('SIGKILL')
+      if (instance.role === 'main' && instance.port !== undefined) {
+        if (this.portGuard !== undefined) {
+          try {
+            this.portGuard.install(instance.port)
+          } catch (error) {
+            // 故障即关闭（fail closed）：没有端口守卫，同租户本地用户就能
+            // 直接连到这个 DSH 的环回 RPC。杀掉刚拉起的子进程并把实例
+            // 标记为 crashed，而不是在无守卫状态下继续服务。
+            instance.status = 'crashed'
+            instance.lastError = error instanceof Error ? error.message : String(error)
+            child.kill('SIGKILL')
+            return
+          }
         }
+        // 进程已 spawn ≠ 服务已就绪：保持 starting，直到环回监听真正
+        // 接受连接才转 running —— UI 的"运行中"反映服务可用性。
+        void this.markRunningWhenListening(instance)
+      } else {
+        instance.status = 'running'
       }
     })
     child.stdout?.pipe(process.stdout)
@@ -337,6 +370,20 @@ export class Supervisor {
     }, this.config.restartBackoffMs)
     timer.unref()
     this.restartTimers.set(userId, timer)
+  }
+
+  /** 轮询实例的环回端口直到接受连接，才把 status 置为 running。
+   * 实例提前退出/被停止（status 离开 starting）或超过探测时长时静默结束。 */
+  private async markRunningWhenListening(instance: Instance): Promise<void> {
+    const deadline = Date.now() + READY_PROBE_TIMEOUT_MS
+    while (instance.status === 'starting' && Date.now() < deadline) {
+      if (await probePort(instance.port!)) {
+        // 仅当仍是同一个 starting 实例时转 running（探测期间可能已崩溃/停止）。
+        if (instance.status === 'starting') instance.status = 'running'
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, READY_PROBE_INTERVAL_MS))
+    }
   }
 
   private killInstance(userId: string, instance: Instance): void {
