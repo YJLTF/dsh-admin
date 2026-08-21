@@ -1,24 +1,24 @@
-# Intranet (LAN-IP, no domain) deployment example.
-#   1. Set PUBLIC_HOST to the server's LAN IP (static/DHCP-reserved).
-#   2. The DSH port range must match the published range; size it for your
-#      max concurrent users (one port per running DSH).
-#   3. Data (SQLite + encryption secret + per-user homes) lives in the named
-#      volume — losing it loses all accounts and stored API keys.
+# 内网（局域网 IP，无域名）部署示例。
+#   1. 将 PUBLIC_HOST 设置为服务器的局域网 IP（静态 IP 或 DHCP 保留地址）。
+#   2. DSH 端口范围必须与发布（published）的端口范围一致；请根据最大
+#      并发用户数规划大小（每个运行中的 DSH 占用一个端口）。
+#   3. 数据（SQLite + 加密密钥 + 各用户主目录）保存在命名卷（named
+#      volume）中——丢失该卷将丢失所有账号和已存储的 API 密钥。
 services:
   dsh-admin:
     build: .
     image: dsh-admin:latest
-    init: true # reap zombies; forward signals
+    init: true # 回收僵尸进程；转发信号
     restart: unless-stopped
-    stop_grace_period: 20s # child kill has a 5s SIGKILL backoff
+    stop_grace_period: 20s # 子进程杀死操作有 5 秒的 SIGKILL 退避重试
     ports:
-      - "3080:3080" # orchestrator web UI + API
-      - "40000-40100:40000-40100" # per-user child DSH ports
+      - "3080:3080" # 编排器 Web UI + API
+      - "40000-40100:40000-40100" # 每用户子 DSH 端口
     environment:
-      DSH_ADMIN_PUBLIC_HOST: 192.168.0.131 # <- your LAN IP
+      DSH_ADMIN_PUBLIC_HOST: 192.168.0.131 # <- 你的局域网 IP
       DSH_ADMIN_DSH_PORT_MIN: "40000"
       DSH_ADMIN_DSH_PORT_MAX: "40100"
-      # DSH_ADMIN_DSH_BIN: "" # not needed; dsh is installed in the image
+      # DSH_ADMIN_DSH_BIN: "" # 无需设置；dsh 已安装在镜像内
     volumes:
       - dsh-data:/var/lib/dsh-admin
 
