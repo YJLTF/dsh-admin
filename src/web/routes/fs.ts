@@ -1,0 +1,383 @@
+/**
+ * 文件资源管理器路由：列目录、新建、上传（multipart 流式）、删除、
+ * 重命名、移动、文本预览与文件下载。
+ * 每个路径都规范到调用者自己的工作区根目录之下，
+ * 因此一个用户永远无法寻址另一个用户的文件。
+ * @module dsh-admin/web/routes/fs
+ */
+
+import type { FastifyPluginAsync } from 'fastify'
+import { createReadStream, createWriteStream } from 'node:fs'
+import { mkdir, open, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { pipeline } from 'node:stream/promises'
+import { basename, dirname, join, sep } from 'node:path'
+import { requireAuth } from '../middleware/authn.js'
+import { resolveUserPath, resolveWithinRoot, safeFilename } from '../middleware/fs-guard.js'
+import { listDir, statEntry, workspaceRoot } from '../../fs/workspace.js'
+import { isTextByExtension, lookupMime, sniffIsBinary } from '../../fs/mime.js'
+
+const pathSchema = { type: 'string', maxLength: 512 }
+
+const mkdirSchema = {
+  body: {
+    type: 'object',
+    required: ['path'],
+    additionalProperties: false,
+    properties: { path: pathSchema },
+  },
+} as const
+
+const createSchema = {
+  body: {
+    type: 'object',
+    required: ['path', 'name', 'type'],
+    additionalProperties: false,
+    properties: {
+      path: pathSchema,
+      name: { type: 'string', maxLength: 255 },
+      type: { type: 'string', enum: ['file', 'dir'] },
+    },
+  },
+} as const
+
+const deleteSchema = {
+  body: {
+    type: 'object',
+    required: ['path'],
+    additionalProperties: false,
+    properties: { path: pathSchema },
+  },
+} as const
+
+const renameSchema = {
+  body: {
+    type: 'object',
+    required: ['path', 'name'],
+    additionalProperties: false,
+    properties: { path: pathSchema, name: { type: 'string', maxLength: 255 } },
+  },
+} as const
+
+const moveSchema = {
+  body: {
+    type: 'object',
+    required: ['path', 'dest'],
+    additionalProperties: false,
+    properties: { path: pathSchema, dest: pathSchema },
+  },
+} as const
+
+/**
+ * 净化上传文件名里的相对路径（文件夹上传时浏览器会把
+ * `目录/子目录/文件` 整串放进 filename 字段）。逐段校验：拒绝
+ * 空/`.`/`..`/含 NUL 或盘符冒号的段；返回以 `/` 连接的安全相对
+ * 路径，非法输入返回 null。最终落盘位置还会再过一次
+ * {@link resolveWithinRoot} 兜底。
+ */
+function sanitizeRelPath(raw: string | undefined): string | null {
+  if (raw === undefined || raw === '') return null
+  const segments = raw.split(/[\\/]+/).filter((s) => s !== '')
+  const clean: string[] = []
+  for (const seg of segments) {
+    if (seg === '.' || seg === '..' || seg.includes('\0') || seg.includes(':') || seg.length > 255) {
+      return null
+    }
+    clean.push(seg)
+  }
+  return clean.length > 0 ? clean.join('/') : null
+}
+
+/** RFC 5987 编码的 Content-Disposition，保证中文文件名不乱码。 */
+function contentDisposition(kind: 'inline' | 'attachment', name: string): string {
+  return `${kind}; filename*=UTF-8''${encodeURIComponent(name)}`
+}
+
+/**
+ * 解析单段 `Range: bytes=start-end` 请求。返回 null 表示无 Range
+ * 头（全量响应），`'invalid'` 表示语法正确但区间不可满足（416）。
+ */
+function parseRange(
+  header: string | undefined,
+  size: number,
+): { start: number; end: number } | 'invalid' | null {
+  if (header === undefined) return null
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim())
+  if (m === null || (m[1] === '' && m[2] === '')) return 'invalid'
+  let start: number
+  let end: number
+  if (m[1] === '') {
+    // 后缀区间 `bytes=-N`：最后 N 字节
+    const suffix = Number(m[2])
+    if (suffix === 0) return 'invalid'
+    start = Math.max(0, size - suffix)
+    end = size - 1
+  } else {
+    start = Number(m[1])
+    end = m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1)
+  }
+  if (start > end || start >= size) return 'invalid'
+  return { start, end }
+}
+
+export const fsRoutes: FastifyPluginAsync = async (app) => {
+  const config = app.config
+
+  /** resolveUserPath + 拒绝把工作区根本身当作操作对象。 */
+  function resolveEntry(userId: string, relPath: string): { ok: true; abs: string } | { ok: false; error: string } {
+    const p = resolveUserPath(config, userId, relPath)
+    if (!p.ok) return { ok: false, error: 'bad_path' }
+    if (p.abs === workspaceRoot(config, userId)) return { ok: false, error: 'bad_path' }
+    return p
+  }
+
+  app.get('/api/desktop/tree', { preHandler: requireAuth }, async (request, reply) => {
+    const { path = '' } = request.query as { path?: string }
+    const p = resolveUserPath(config, request.user!.id, path)
+    if (!p.ok) return reply.code(400).send({ error: 'bad_path' })
+    try {
+      return { path, entries: await listDir(p.abs) }
+    } catch {
+      return reply.code(404).send({ error: 'not_found' })
+    }
+  })
+
+  app.post('/api/fs/mkdir', { preHandler: requireAuth, schema: mkdirSchema }, async (request, reply) => {
+    const { path } = request.body as { path: string }
+    const p = resolveUserPath(config, request.user!.id, path)
+    if (!p.ok) return reply.code(400).send({ error: 'bad_path' })
+    try {
+      await mkdir(p.abs)
+      return { ok: true }
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (code === 'EEXIST') return reply.code(409).send({ error: 'exists' })
+      if (code === 'ENOENT') return reply.code(404).send({ error: 'parent_missing' })
+      throw err
+    }
+  })
+
+  app.post('/api/fs/create', { preHandler: requireAuth, schema: createSchema }, async (request, reply) => {
+    const { path, name, type } = request.body as { path: string; name: string; type: 'file' | 'dir' }
+    const p = resolveUserPath(config, request.user!.id, path)
+    if (!p.ok) return reply.code(400).send({ error: 'bad_path' })
+    let filename: string
+    try {
+      filename = safeFilename(name)
+    } catch {
+      return reply.code(400).send({ error: 'bad_name' })
+    }
+    const target = join(p.abs, filename)
+    try {
+      if (type === 'dir') await mkdir(target)
+      else await writeFile(target, '')
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code
+      if (code === 'EEXIST') return reply.code(409).send({ error: 'exists' })
+      if (code === 'ENOENT') return reply.code(404).send({ error: 'parent_missing' })
+      throw err
+    }
+    return { ok: true, name: filename, type }
+  })
+
+  /**
+   * multipart 流式上传。字段 `path` 指定目标目录，其后跟随 1..N 个
+   * 文件 part；文件夹上传时 part 的 filename 携带相对路径
+   * （preservePath），逐级建目录后流式写盘。先写临时文件再原子
+   * rename，客户端中途断开不会留下半个目标文件。
+   */
+  app.post('/api/fs/upload', { preHandler: requireAuth }, async (request, reply) => {
+    if (!request.isMultipart()) return reply.code(400).send({ error: 'expected_multipart' })
+    const userId = request.user!.id
+    let destAbs: string | null = null
+    let tmp: string | null = null
+    let count = 0
+    try {
+      for await (const part of request.parts()) {
+        if (part.type === 'field') {
+          if (part.fieldname === 'path' && destAbs === null) {
+            const p = resolveUserPath(config, userId, String(part.value))
+            if (!p.ok) return reply.code(400).send({ error: 'bad_path' })
+            destAbs = p.abs
+          }
+          continue
+        }
+        if (destAbs === null) return reply.code(400).send({ error: 'missing_path' })
+        const rel = sanitizeRelPath(part.filename)
+        if (rel === null) return reply.code(400).send({ error: 'bad_name' })
+        const target = resolveWithinRoot(destAbs, rel)
+        await mkdir(dirname(target), { recursive: true })
+        tmp = `${target}..uploading`
+        await pipeline(part.file, createWriteStream(tmp))
+        if (part.file.truncated) {
+          await rm(tmp, { force: true })
+          tmp = null
+          return reply.code(413).send({ error: 'too_large' })
+        }
+        await rename(tmp, target)
+        tmp = null
+        count++
+      }
+    } catch (err) {
+      if (tmp !== null) await rm(tmp, { force: true }).catch(() => {})
+      const code = (err as NodeJS.ErrnoException).code
+      if (code === 'ENOENT') return reply.code(404).send({ error: 'parent_missing' })
+      throw err
+    }
+    if (destAbs === null) return reply.code(400).send({ error: 'missing_path' })
+    return { ok: true, count }
+  })
+
+  app.post('/api/fs/delete', { preHandler: requireAuth, schema: deleteSchema }, async (request, reply) => {
+    const { path } = request.body as { path: string }
+    const p = resolveEntry(request.user!.id, path)
+    if (!p.ok) return reply.code(400).send({ error: p.error })
+    try {
+      await rm(p.abs, { recursive: true, force: false })
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return reply.code(404).send({ error: 'not_found' })
+      throw err
+    }
+    return { ok: true }
+  })
+
+  app.post('/api/fs/rename', { preHandler: requireAuth, schema: renameSchema }, async (request, reply) => {
+    const { path, name } = request.body as { path: string; name: string }
+    const p = resolveEntry(request.user!.id, path)
+    if (!p.ok) return reply.code(400).send({ error: p.error })
+    let filename: string
+    try {
+      filename = safeFilename(name)
+    } catch {
+      return reply.code(400).send({ error: 'bad_name' })
+    }
+    const target = join(dirname(p.abs), filename)
+    if (target === p.abs) return { ok: true }
+    try {
+      await stat(target)
+      return reply.code(409).send({ error: 'exists' })
+    } catch {
+      // 目标不存在，继续改名。
+    }
+    try {
+      await rename(p.abs, target)
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return reply.code(404).send({ error: 'not_found' })
+      throw err
+    }
+    return { ok: true, name: filename }
+  })
+
+  app.post('/api/fs/move', { preHandler: requireAuth, schema: moveSchema }, async (request, reply) => {
+    const { path, dest } = request.body as { path: string; dest: string }
+    const src = resolveEntry(request.user!.id, path)
+    if (!src.ok) return reply.code(400).send({ error: src.error })
+    const dst = resolveUserPath(config, request.user!.id, dest)
+    if (!dst.ok) return reply.code(400).send({ error: 'bad_path' })
+    let destSt
+    try {
+      destSt = await stat(dst.abs)
+    } catch {
+      return reply.code(404).send({ error: 'dest_not_found' })
+    }
+    if (!destSt.isDirectory()) return reply.code(400).send({ error: 'dest_not_dir' })
+    // 把目录移动进它自己的子树会造出环。
+    if (dst.abs === src.abs || dst.abs.startsWith(src.abs + sep)) {
+      return reply.code(400).send({ error: 'invalid_dest' })
+    }
+    const target = join(dst.abs, basename(src.abs))
+    try {
+      await stat(target)
+      return reply.code(409).send({ error: 'exists' })
+    } catch {
+      // 目标槽位空闲，可以移动。
+    }
+    try {
+      await rename(src.abs, target)
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return reply.code(404).send({ error: 'not_found' })
+      throw err
+    }
+    return { ok: true }
+  })
+
+  /** 文本预览：按扩展名 + NUL 嗅探判定文本，最多返回 previewBytes。 */
+  app.get('/api/fs/read', { preHandler: requireAuth }, async (request, reply) => {
+    const { path = '' } = request.query as { path?: string }
+    const p = resolveUserPath(config, request.user!.id, path)
+    if (!p.ok) return reply.code(400).send({ error: 'bad_path' })
+    let entry
+    try {
+      entry = await statEntry(p.abs)
+    } catch {
+      return reply.code(404).send({ error: 'not_found' })
+    }
+    if (entry.type === 'dir') return reply.code(400).send({ error: 'is_dir' })
+    const fh = await open(p.abs, 'r').catch(() => null)
+    if (fh === null) return reply.code(404).send({ error: 'not_found' })
+    try {
+      const head = Buffer.alloc(Math.min(8192, entry.size))
+      await fh.read(head, 0, head.length, 0)
+      if (!isTextByExtension(entry.name) && sniffIsBinary(head)) {
+        return reply.code(415).send({ error: 'binary' })
+      }
+      const cap = Math.min(entry.size, config.previewBytes)
+      const buf = Buffer.alloc(cap)
+      await fh.read(buf, 0, cap, 0)
+      return {
+        name: entry.name,
+        size: entry.size,
+        truncated: entry.size > cap,
+        text: buf.toString('utf8'),
+      }
+    } finally {
+      await fh.close()
+    }
+  })
+
+  /**
+   * 原始文件流（预览 inline / 下载 attachment）。inline 响应统一加
+   * CSP sandbox + nosniff，上传的 HTML/SVG 无法在同源执行脚本；
+   * 支持单段 Range 以便视频拖动进度。该路由关闭全局限流 —— 视频
+   * 播放器会连续发出大量小 range 请求。
+   */
+  app.get(
+    '/api/fs/raw',
+    { preHandler: requireAuth, config: { rateLimit: false } },
+    async (request, reply) => {
+      const query = request.query as { path?: string; download?: string }
+      const p = resolveUserPath(config, request.user!.id, query.path ?? '')
+      if (!p.ok) return reply.code(400).send({ error: 'bad_path' })
+      let st
+      try {
+        st = await stat(p.abs)
+      } catch {
+        return reply.code(404).send({ error: 'not_found' })
+      }
+      if (!st.isFile()) return reply.code(400).send({ error: 'is_dir' })
+      const name = basename(p.abs)
+      const download = query.download === '1'
+      reply.header('content-type', lookupMime(name))
+      reply.header('x-content-type-options', 'nosniff')
+      reply.header('accept-ranges', 'bytes')
+      reply.header('content-disposition', contentDisposition(download ? 'attachment' : 'inline', name))
+      if (!download) {
+        // inline 内容会被浏览器渲染：沙箱化，杜绝同源脚本执行。
+        reply.header('content-security-policy', 'sandbox')
+      }
+      const range = parseRange(request.headers.range, st.size)
+      if (range === 'invalid') {
+        reply.code(416).header('content-range', `bytes */${st.size}`)
+        return reply.send()
+      }
+      if (range !== null) {
+        const length = range.end - range.start + 1
+        reply.code(206)
+        reply.header('content-range', `bytes ${range.start}-${range.end}/${st.size}`)
+        reply.header('content-length', length)
+        return reply.send(createReadStream(p.abs, { start: range.start, end: range.end }))
+      }
+      reply.header('content-length', st.size)
+      return reply.send(createReadStream(p.abs))
+    },
+  )
+}

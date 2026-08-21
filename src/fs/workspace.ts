@@ -6,7 +6,7 @@
 
 import { chmodSync, mkdirSync } from 'node:fs'
 import { mkdir, readdir, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { ServerConfig } from '../config.js'
 
 /** 用户工作区的绝对根目录（`<dataRoot>/users/<id>/ws`）。 */
@@ -46,14 +46,14 @@ export interface FsEntry {
   mtimeMs: number
 }
 
-/** 列出目录的直接子项（异步，并行 stat）。 */
+/** 列出目录的直接子项（异步，并行 stat）。目录也 stat，以便
+ * 文件管理器显示文件夹的修改时间。 */
 export async function listDir(absPath: string): Promise<FsEntry[]> {
   const entries = await readdir(absPath, { withFileTypes: true })
   const stats = await Promise.all(
     entries.map(async (entry) => ({
       entry,
-      // withFileTypes 已给出 dir/file；stat 只补充 size/mtime。
-      st: entry.isDirectory() ? null : await stat(join(absPath, entry.name)).catch(() => null),
+      st: await stat(join(absPath, entry.name)).catch(() => null),
     })),
   )
   return stats.map(({ entry, st }) => ({
@@ -62,4 +62,10 @@ export async function listDir(absPath: string): Promise<FsEntry[]> {
     size: st?.isFile() ? st.size : 0,
     mtimeMs: st?.mtimeMs ?? 0,
   }))
+}
+
+/** stat 单个条目（符号链接跟随目标）；不存在时抛出原始错误。 */
+export async function statEntry(absPath: string): Promise<FsEntry> {
+  const st = await stat(absPath)
+  return { name: basename(absPath), type: st.isDirectory() ? 'dir' : 'file', size: st.size, mtimeMs: st.mtimeMs }
 }

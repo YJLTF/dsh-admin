@@ -6,6 +6,7 @@
 
 import Fastify, { type FastifyInstance } from 'fastify'
 import fastifyStatic from '@fastify/static'
+import fastifyMultipart from '@fastify/multipart'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import type { ServerConfig } from '../config.js'
@@ -15,7 +16,7 @@ import { Supervisor } from '../supervisor/orchestrator.js'
 import { rateLimit } from './middleware/rate-limit.js'
 import { authRoutes } from './routes/auth.js'
 import { adminRoutes } from './routes/admin.js'
-import { desktopRoutes } from './routes/desktop.js'
+import { fsRoutes } from './routes/fs.js'
 import { dshRoutes } from './routes/dsh.js'
 import { pluginRoutes } from './routes/plugins.js'
 import { sharedConfigRoutes } from './routes/shared-config.js'
@@ -78,10 +79,24 @@ export async function buildServer(config: ServerConfig): Promise<FastifyInstance
   // 限流最先注册，让认证/管理面默认得到保护。
   await app.register(rateLimit)
 
+  // multipart 流式上传（文件管理器）。preservePath 保留文件夹上传时
+  // filename 携带的相对路径（逐段净化见 routes/fs.ts）；单文件上限由
+  // limits.fileSize 强制（流式解析不受 JSON bodyLimit 约束）。
+  await app.register(fastifyMultipart, {
+    preservePath: true,
+    limits: {
+      fileSize: config.maxFileBytes,
+      files: 2000,
+      fields: 10,
+      fieldNameSize: 64,
+      fieldSize: 1024,
+    },
+  })
+
   // 路由组（API）。
   await app.register(authRoutes)
   await app.register(adminRoutes)
-  await app.register(desktopRoutes)
+  await app.register(fsRoutes)
   await app.register(dshRoutes)
   await app.register(pluginRoutes)
   await app.register(sharedConfigRoutes)

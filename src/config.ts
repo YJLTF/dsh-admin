@@ -27,8 +27,12 @@ export interface ServerConfig {
   logLevel: string
   /** 会话有效期（秒）。 */
   sessionTtlSeconds: number
-  /** 上传请求体最大字节数（base64 JSON；约为文件大小的 0.75 倍）。 */
+  /** JSON 请求体最大字节数（全局 bodyLimit；上传已改为 multipart 流式）。 */
   maxUploadBytes: number
+  /** 单个上传文件的最大字节数（multipart limits.fileSize 强制）。 */
+  maxFileBytes: number
+  /** 文本预览最多读取的字节数（超出截断并标记 truncated）。 */
+  previewBytes: number
   /** 崩溃的子 DSH 自动重启前的延迟（毫秒）。 */
   restartBackoffMs: number
   /** 隔离级别（见 {@link IsolationMode}）。 */
@@ -64,6 +68,8 @@ export interface ConfigOverrides {
   logLevel?: string
   sessionTtlSeconds?: number | string
   maxUploadBytes?: number | string
+  maxFileBytes?: number | string
+  previewBytes?: number | string
   restartBackoffMs?: number | string
   isolationMode?: IsolationMode | string
   spawnAsUserCommand?: string[]
@@ -82,6 +88,8 @@ const DEFAULT_DSH_COMMAND = ['dsh']
 const DEFAULT_LOG_LEVEL = 'info'
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7
 const DEFAULT_MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+const DEFAULT_MAX_FILE_BYTES = 1024 * 1024 * 1024
+const DEFAULT_PREVIEW_BYTES = 256 * 1024
 const DEFAULT_RESTART_BACKOFF_MS = 1000
 const DEFAULT_ISOLATION_MODE: IsolationMode = 'soft'
 const DEFAULT_SPAWN_AS_USER_COMMAND = [
@@ -157,6 +165,12 @@ export function resolveConfig(overrides: ConfigOverrides = {}): ServerConfig {
     ),
     maxUploadBytes: Number(
       overrides.maxUploadBytes ?? process.env.DSH_ADMIN_MAX_UPLOAD ?? DEFAULT_MAX_UPLOAD_BYTES,
+    ),
+    maxFileBytes: Number(
+      overrides.maxFileBytes ?? process.env.DSH_ADMIN_MAX_FILE ?? DEFAULT_MAX_FILE_BYTES,
+    ),
+    previewBytes: Number(
+      overrides.previewBytes ?? process.env.DSH_ADMIN_PREVIEW_MAX ?? DEFAULT_PREVIEW_BYTES,
     ),
     restartBackoffMs: Number(
       overrides.restartBackoffMs ?? process.env.DSH_ADMIN_RESTART_BACKOFF ?? DEFAULT_RESTART_BACKOFF_MS,

@@ -93,9 +93,11 @@ body {
 .gap-top-s { margin-top: 8px; }
 
 /* ---------- 弹窗 ---------- */
-.modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: rgba(4, 9, 22, 0.55); }
-.modal-card { background: var(--surface); border-radius: 14px; padding: 20px; width: 320px; box-shadow: var(--shadow); }
-.modal-actions { margin-top: 16px; }
+.modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px; background: rgba(4, 9, 22, 0.55); }
+.modal-card { background: var(--surface); border-radius: 14px; padding: 22px 24px 20px; width: 400px; box-shadow: var(--shadow); }
+.modal-card h3 { margin: 0 0 16px; }
+/* 对话框按钮行：右对齐（桌面惯例），不吃 row-actions 的下边距 */
+.modal-actions { margin-top: 18px; margin-bottom: 0; justify-content: flex-end; }
 
 /* ---------- 桌面 ---------- */
 .desktop { position: fixed; inset: 0; display: flex; flex-direction: column; }
@@ -175,6 +177,15 @@ body {
 #fileIcons { display: contents; }
 #fileIcons .desk-icon .label { font-size: 12px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .desk-empty { color: #9fb4dd; font-size: 13px; padding: 18px 4px; }
+/* 桌面图标拖拽（拖到文件夹上移动）：拖动中的源半透明，目标文件夹高亮 */
+.desk-icon .tile { transition: transform .12s; }
+.desk-icon.dragging { opacity: .45; }
+.desk-icon.drop-target {
+  background: rgba(77, 124, 254, 0.30);
+  border-color: rgba(140, 172, 255, 0.9);
+  box-shadow: 0 0 0 2px rgba(77, 124, 254, 0.35);
+}
+.desk-icon.drop-target .tile { transform: scale(1.07); }
 
 /* ---------- 窗口 ---------- */
 .window {
@@ -228,6 +239,64 @@ table.files th { color: var(--ink-soft); font-weight: 600; font-size: 12px; }
 table.files tbody tr:hover { background: var(--surface-2); }
 table.files .dir { color: var(--accent); cursor: pointer; font-weight: 600; }
 table.files .dir:hover { text-decoration: underline; }
+table.files td.name-cell { display: flex; align-items: center; gap: 7px; }
+table.files td.name-cell .ficon { width: 15px; height: 15px; flex: none; color: var(--ink-soft); }
+table.files td.name-cell .ficon.dir { color: var(--accent); }
+table.files td.actions, table.files th.actions { text-align: right; white-space: nowrap; }
+.iconbtn {
+  display: inline-grid; place-items: center; width: 27px; height: 27px;
+  border: 0; border-radius: 7px; background: transparent; cursor: pointer;
+  color: var(--ink-soft); transition: background .12s, color .12s;
+}
+.iconbtn svg { width: 15px; height: 15px; }
+.iconbtn:hover { background: #e8ecf5; color: var(--ink); }
+.iconbtn.danger:hover { background: #fde8e9; color: var(--danger); }
+.iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 移动对话框的目录导航 */
+.move-card { width: 460px; }
+.move-card .pathbar { margin-bottom: 10px; }
+.move-card .crumbs { flex-wrap: wrap; }
+.move-dirs {
+  max-height: 300px; overflow: auto; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface-2); padding: 6px; margin-bottom: 4px;
+}
+.move-dir-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+  font-size: 13.5px; cursor: pointer; color: var(--accent); font-weight: 600;
+}
+.move-dir-item:hover { background: #e8ecf5; }
+.move-dir-item svg { width: 15px; height: 15px; flex: none; }
+
+/* 预览对话框：宽度随内容自适应（小文件不空旷，大内容到上限） */
+.preview-modal .modal-card { width: fit-content; min-width: min(420px, 92vw); max-width: min(920px, 94vw); }
+.preview-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.preview-title { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(480px, 60vw); }
+.preview-body { max-height: 66vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.preview-body img { display: block; max-width: 100%; max-height: 62vh; margin: 0 auto; }
+.preview-body video { display: block; width: min(640px, 86vw); max-height: 62vh; }
+.preview-body iframe { display: block; width: min(760px, 88vw); height: 62vh; border: 0; background: #fff; }
+.preview-body pre.preview-text {
+  margin: 0; padding: 12px; font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+  white-space: pre-wrap; word-break: break-all; color: var(--ink);
+}
+.preview-body .hint { padding: 10px 12px 0; }
+.preview-audio-name { padding: 14px 14px 10px; font-size: 13px; color: var(--ink-soft); }
+.preview-body audio { display: block; width: calc(100% - 28px); margin: 0 14px 14px; }
+.preview-binary { display: grid; place-items: center; gap: 6px; padding: 48px 16px; text-align: center; }
+.preview-binary-name { font-size: 14px; font-weight: 600; word-break: break-all; }
+
+/* 上传进度提示（桌面右下角） */
+.upload-toast {
+  position: fixed; right: 18px; bottom: 74px; z-index: 150;
+  width: 300px; padding: 12px 14px; border-radius: 12px;
+  background: rgba(13, 26, 52, 0.92); color: #dbe5ff; font-size: 13px;
+  box-shadow: var(--shadow); backdrop-filter: blur(10px);
+}
+.upload-toast > div:first-child { margin-bottom: 8px; word-break: break-all; }
+.upload-progress { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.16); overflow: hidden; }
+.upload-progress-fill { height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .15s; }
+.upload-toast.done .upload-progress-fill { background: var(--ok); }
 
 /* DSH 状态 */
 .stat { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); margin-bottom: 12px; }
@@ -285,7 +354,9 @@ table.admin tr.empty td { color: var(--ink-soft); text-align: center; padding: 2
   .window-body table { min-width: 520px; }
   .window-title { height: 48px; }
   .window-title .controls button { width: 34px; height: 34px; }
-  .modal-card { width: 100%; max-width: 340px; }
+  /* 弹窗在小屏上占满可用宽度（.modal 自带 16px 内边距） */
+  .modal-card { width: 100%; max-width: 440px; }
+  .preview-modal .modal-card { width: fit-content; min-width: 0; max-width: 94vw; }
 }
 
 /* ---------- 共享配置编辑器（桌面管理台窗口） ---------- */

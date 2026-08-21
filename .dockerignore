@@ -9,6 +9,7 @@
 .vscode
 .idea
 AGENTS.md
+.zcode
 
 # 依赖与构建产物（镜像内重新 npm ci + tsc；dsh 装在 /opt/dsh-image）
 **/node_modules

@@ -37,6 +37,10 @@
           <div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
           <span class="label">上传文件</span>
         </div>
+        <div class="desk-icon" data-app="uploaddir" role="button" tabindex="0">
+          <div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 16v-5"/><path d="M10 13l2-2 2 2"/></svg></div>
+          <span class="label">上传文件夹</span>
+        </div>
         <div class="desk-icon" data-app="newfile" role="button" tabindex="0">
           <div class="tile file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v5M9.5 14.5h5"/></svg></div>
           <span class="label">新建文件</span>
@@ -60,6 +64,7 @@
       <div class="taskbar">
         <div class="app" data-open="dsh" role="button" tabindex="0" aria-label="DSH"><img src="/deepseek.webp" alt="DSH" /></div>
         <div class="app" data-app="upload" role="button" tabindex="0" aria-label="上传文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
+        <div class="app" data-app="uploaddir" role="button" tabindex="0" aria-label="上传文件夹"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 16v-5"/><path d="M10 13l2-2 2 2"/></svg></div>
         <div class="app" data-app="newfile" role="button" tabindex="0" aria-label="新建文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v5M9.5 14.5h5"/></svg></div>
         <div class="app" data-open="files" role="button" tabindex="0" aria-label="我的文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
         <div class="app hidden" id="adminTask" data-open="admin" role="button" tabindex="0" aria-label="用户管理"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/></svg></div>
@@ -71,7 +76,7 @@
     <!-- 新建文件/文件夹对话框 -->
     <div id="newFileDialog" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="nfTitle">
       <div class="modal-card">
-        <h3 id="nfTitle" style="margin:0 0 14px">新建</h3>
+        <h3 id="nfTitle">新建</h3>
         <div class="field"><label for="nfName">名称</label><input id="nfName" placeholder="例如 notes.md 或 我的项目" /></div>
         <div class="field"><label for="nfType">类型</label>
           <select id="nfType">
@@ -86,7 +91,57 @@
       </div>
     </div>
 
-    <input id="fileInput" type="file" class="hidden" />
+    <!-- 重命名对话框 -->
+    <div id="renameDialog" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="rnTitle">
+      <div class="modal-card">
+        <h3 id="rnTitle">重命名</h3>
+        <div class="field"><label for="rnName">新名称</label><input id="rnName" /></div>
+        <div class="row-actions modal-actions">
+          <button class="btn primary" id="rnOk">确定</button>
+          <button class="btn ghost" id="rnCancel">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 移动对话框（迷你目录导航） -->
+    <div id="moveDialog" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="mvTitle">
+      <div class="modal-card move-card">
+        <h3 id="mvTitle">移动到…</h3>
+        <div class="pathbar">
+          <button class="btn ghost small" id="moveUpBtn">↑ 上级</button>
+          <span class="crumbs" id="moveCrumbs"></span>
+        </div>
+        <div class="move-dirs" id="moveDirs"></div>
+        <div class="row-actions modal-actions">
+          <button class="btn primary" id="moveHereBtn">移动到此处</button>
+          <button class="btn ghost" id="moveCancelBtn">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 预览对话框 -->
+    <div id="previewModal" class="modal hidden preview-modal" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
+      <div class="modal-card">
+        <div class="preview-head">
+          <strong id="previewTitle" class="preview-title"></strong>
+          <button class="btn ghost small" id="previewCloseBtn">✕ 关闭</button>
+        </div>
+        <div class="preview-body" id="previewBody"></div>
+        <div class="row-actions modal-actions">
+          <span class="hint" style="flex:1"></span>
+          <button class="btn primary hidden" id="previewDownload">下载</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 上传进度提示（右下角） -->
+    <div id="uploadToast" class="upload-toast hidden">
+      <div id="uploadToastText"></div>
+      <div class="upload-progress"><div class="upload-progress-fill" id="uploadToastFill"></div></div>
+    </div>
+
+    <input id="fileInput" type="file" class="hidden" multiple />
+    <input id="folderInput" type="file" class="hidden" webkitdirectory directory multiple />
 
     <!-- ============ 窗口：DSH ============ -->
     <div class="window hidden" id="win-dsh">
@@ -125,11 +180,14 @@
       </div>
       <div class="window-body">
         <div class="pathbar">
-          <button class="btn ghost small" id="newFolderBtn">新建文件夹</button>
+          <button class="btn ghost small" data-app="upload">上传文件</button>
+          <button class="btn ghost small" data-app="uploaddir">上传文件夹</button>
+          <button class="btn ghost small" data-app="newdir">新建</button>
+          <button class="btn ghost small" data-app="refresh">刷新</button>
           <span class="crumbs" id="breadcrumb"></span>
         </div>
         <table class="files">
-          <thead><tr><th>名称</th><th>类型</th><th>大小</th><th>修改时间</th></tr></thead>
+          <thead><tr><th>名称</th><th>类型</th><th>大小</th><th>修改时间</th><th class="actions">操作</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -187,6 +245,7 @@
 
     <script src="/window-manager.js"></script>
     <script src="/shared-config-editor.js"></script>
+    <script src="/file-explorer.js"></script>
     <script>
       // ---------- 会话 ----------
       let user = null
@@ -221,167 +280,17 @@
         }
       }
 
-      // ---------- 窗口管理器（外部） + 应用接线 ----------
+      // ---------- 窗口管理器（外部） ----------
       const { openWindow, closeWindow, isOpen } = WindowManager
-      document.querySelectorAll('[data-app]').forEach((el) => el.addEventListener('click', () => appAction(el.dataset.app)))
-      // 为操作图标（上传/新建文件）提供键盘激活。
-      document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return
-        const el = event.target.closest ? event.target.closest('[data-app]') : null
-        if (el) {
-          event.preventDefault()
-          appAction(el.dataset.app)
-        }
-      })
       // 管理台窗口每次打开时刷新数据。
       document.querySelectorAll('#adminIcon, #adminTask').forEach((el) => el.addEventListener('click', () => { if (user && user.role === 'admin') loadUsers() }))
       document.querySelectorAll('#sharedIcon, #sharedTask').forEach((el) => el.addEventListener('click', () => { if (user && user.role === 'admin') loadShared() }))
 
-      // ---------- 当前文件夹（共享） ----------
-      let currentPath = []
-      function pathString() { return currentPath.join('/') }
-      function deskPathLabel() { return currentPath.length ? '我的桌面 / ' + currentPath.join(' / ') : '我的桌面 / 根目录' }
-
-      // ---------- 桌面文件网格 ----------
-      const fileIcons = document.getElementById('fileIcons')
-      const deskPathEl = document.getElementById('deskPath')
-      const backBtn = document.getElementById('backBtn')
-      const TILE_DIR = '<div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>'
-      const TILE_FILE = '<div class="tile file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>'
-      function entryPath(name) { return encodeURIComponent(pathString() ? pathString() + '/' + name : name) }
-      function renderDesktop(entries) {
-        fileIcons.innerHTML = ''
-        if (!entries.length) {
-          fileIcons.innerHTML = '<p class="desk-empty">此文件夹为空</p>'
-          return
-        }
-        for (const e of entries) {
-          const icon = document.createElement('div')
-          icon.className = 'desk-icon'
-          icon.dataset.entry = e.type
-          icon.dataset.path = entryPath(e.name)
-          icon.innerHTML = (e.type === 'dir' ? TILE_DIR : TILE_FILE) + '<span class="label">' + esc(e.name) + '</span>'
-          fileIcons.appendChild(icon)
-        }
-      }
-      // 事件委托双击：打开桌面网格上的文件夹。
-      fileIcons.addEventListener('dblclick', (event) => {
-        const icon = event.target.closest('.desk-icon')
-        if (icon && icon.dataset.entry === 'dir') {
-          currentPath = decodeURIComponent(icon.dataset.path).split('/').filter(Boolean)
-          syncAll()
-        }
-      })
-
-      // ---------- 同步桌面 + 文件窗口 + DSH 文件夹 ----------
-      async function syncAll() {
-        document.getElementById('dshFolder').textContent = pathString() || '根目录'
-        deskPathEl.textContent = deskPathLabel()
-        backBtn.classList.toggle('hidden', currentPath.length === 0)
-        const p = pathString()
-        // 一次目录树请求同时供桌面网格和文件窗口使用。
-        const r = await api('/api/desktop/tree' + (p ? '?path=' + encodeURIComponent(p) : ''))
-        const entries = r.ok ? (r.body.entries || []) : []
-        renderDesktop(entries)
-        renderFiles(entries)
-      }
-      async function navigate(path) {
-        currentPath = path ? path.split('/').filter(Boolean) : []
-        await syncAll()
-      }
-      backBtn.addEventListener('click', () => {
-        currentPath = currentPath.slice(0, -1)
-        syncAll()
-      })
-
-      // ---------- 文件窗口（表格） ----------
-      const rows = document.getElementById('rows')
-      const breadcrumb = document.getElementById('breadcrumb')
-      function fmtSize(bytes) { if (!bytes) return '—'; const u = ['B','KB','MB','GB']; let i = 0, n = bytes; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ } return `${n.toFixed(i ? 1 : 0)} ${u[i]}` }
-      function renderBreadcrumb() {
-        const parts = ['<span class="crumb" data-path="">根</span>']
-        let acc = []
-        for (const seg of currentPath) {
-          acc.push(seg)
-          parts.push('<span class="sep">/</span><span class="crumb" data-path="' + encodeURIComponent(acc.join('/')) + '">' + esc(seg) + '</span>')
-        }
-        breadcrumb.innerHTML = parts.join('')
-      }
-      function renderFiles(entries) {
-        const p = pathString()
-        rows.innerHTML = ''
-        if (!entries.length) {
-          rows.innerHTML = '<tr class="empty"><td colspan="4">此文件夹为空</td></tr>'
-        } else {
-          if (p) rows.insertAdjacentHTML('beforeend', '<tr><td class="dir" data-up="1">..</td><td></td><td></td><td></td></tr>')
-          for (const e of entries) {
-            const href = e.type === 'dir' ? ` class="dir" data-path="${entryPath(e.name)}"` : ''
-            rows.insertAdjacentHTML('beforeend', `<tr><td${href}>${esc(e.name)}</td><td>${e.type === 'dir' ? '文件夹' : '文件'}</td><td>${fmtSize(e.size)}</td><td>${new Date(e.mtimeMs).toLocaleString()}</td></tr>`)
-          }
-        }
-        renderBreadcrumb()
-      }
-      // 表格主体的事件委托点击（文件夹 + 上级目录项）。
-      rows.addEventListener('click', (event) => {
-        const dir = event.target.closest('.dir[data-path]')
-        if (dir) { navigate(decodeURIComponent(dir.dataset.path)); return }
-        if (event.target.closest('.dir[data-up]')) {
-          currentPath = currentPath.slice(0, -1)
-          syncAll()
-        }
-      })
-      breadcrumb.addEventListener('click', (event) => {
-        const crumb = event.target.closest('.crumb')
-        if (crumb) navigate(crumb.dataset.path)
-      })
-
-      // ---------- 上传 / 新建文件 / 新建文件夹 ----------
-      const dialog = document.getElementById('newFileDialog')
-      const nfName = document.getElementById('nfName')
-      const nfType = document.getElementById('nfType')
-      const nfTitle = document.getElementById('nfTitle')
-      const nfOk = document.getElementById('nfOk')
-      function openDialog(type) {
-        nfType.value = type
-        nfTitle.textContent = type === 'dir' ? '新建文件夹' : '新建文件'
-        dialog.classList.remove('hidden')
-        nfName.value = ''
-        nfName.focus()
-      }
-      function closeDialog() { dialog.classList.add('hidden') }
-      function appAction(app) {
-        if (app === 'upload') document.getElementById('fileInput').click()
-        if (app === 'newfile') openDialog('file')
-      }
-      dialog.addEventListener('click', (event) => { if (event.target === dialog) closeDialog() })
-      document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && !dialog.classList.contains('hidden')) closeDialog()
-      })
-      document.getElementById('fileInput').addEventListener('change', async (event) => {
-        const file = event.target.files[0]
-        if (!file) return
-        const data = await new Promise((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => resolve(reader.result.split(',')[1])
-          reader.onerror = reject
-          reader.readAsDataURL(file)
-        })
-        const r = await api('/api/fs/upload', { method: 'POST', body: JSON.stringify({ path: pathString(), name: file.name, data }) })
-        if (!r.ok) alert('上传失败：' + r.error)
-        event.target.value = ''
-        syncAll()
-      })
-      document.getElementById('newFolderBtn').addEventListener('click', () => openDialog('dir'))
-      nfOk.addEventListener('click', async () => {
-        const name = nfName.value.trim()
-        if (!name) { alert('请输入名称'); return }
-        const r = await api('/api/fs/create', { method: 'POST', body: JSON.stringify({ path: pathString(), name, type: nfType.value }) })
-        if (!r.ok) { alert('创建失败：' + r.error); return }
-        closeDialog()
-        syncAll()
-      })
-      nfName.addEventListener('keydown', (event) => { if (event.key === 'Enter') nfOk.click() })
-      document.getElementById('nfCancel').addEventListener('click', closeDialog)
+      // ---------- 文件资源管理器（外部模块） ----------
+      // 接管路径状态、桌面网格、文件窗口与全部文件操作；
+      // pathString 供 DSH 启动 / 插件选择复用。
+      const explorer = initFileExplorer({ api, esc })
+      const pathString = explorer.pathString
 
       // ---------- DSH 窗口 ----------
       // 从 status 响应渲染状态行 + 按钮组；返回当前状态
@@ -560,7 +469,7 @@
           document.getElementById('sharedTask').classList.remove('hidden')
           await Promise.all([loadUsers(), loadShared()])
         }
-        await syncAll()
+        await explorer.syncAll()
         await refreshDsh()
         await refreshSharedConfig()
         // 轮询以便异步启动失败（启动后立即崩溃）能及时显现 —

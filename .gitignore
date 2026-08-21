@@ -28,5 +28,6 @@ dsh-data/
 .idea/
 .DS_Store
 Thumbs.db
+.zcode/
 
 *.tar

@@ -12,7 +12,7 @@ DSH 本身是单用户本地工具，没有认证、没有多租户隔离、Web 
 
 - **登录与审核**：管理员先行（`bootstrap-admin`），用户注册后需管理员审核通过；独立管理台 UI。
 - **每用户隔离的 DSH 环境**：主 DSH 负责正常工作；崩溃时**按需拉起一次守护 DSH** 修复并自动重启；装插件重启时守护执行主 DSH 给出的 post-restart 命令。
-- **登录桌面**：文件浏览 / 建文件夹 / 上传；按文件夹启动 DSH；每文件夹独立勾选启用的插件（自动检测该用户 profile 中已安装的插件，持久化并注入 cordis patch）。
+- **登录桌面**：文件资源管理器（文件/文件夹上传含目录结构、新建、重命名、移动、删除、预览[文本/图片/音视频/PDF]、下载）；按文件夹启动 DSH；每文件夹独立勾选启用的插件（自动检测该用户 profile 中已安装的插件，持久化并注入 cordis patch）。
 - **内网直连访问**：`DSH_ADMIN_PUBLIC_HOST=<内网IP>` + 固定子 DSH 端口段，Docker 直接发布端口；每实例内置 forwarder（剥 Origin / 注入 `randomUUID` polyfill / 改写 loopback 门 / per-instance 访问令牌门禁）保证非安全上下文可用且不绕过登录。
 - **共享模型配置**：管理员统一维护提供方与凭据，用户在桌面一键接收，叶子级合并进自己的 `settings.yaml` / `.credentials.yaml`。
 - **硬隔离**（Linux）：每用户独立 OS 账号（`setuid` 降权），`0700` 目录真正隔离跨用户读。
@@ -52,6 +52,8 @@ node lib/cli.js --port 3080 --db ./dev.local.db
 | `DSH_ADMIN_DSH_PORT_MIN/MAX` | `0` | 子 DSH 端口段（Docker 端口映射范围需一致） |
 | `DSH_ADMIN_PORT_GUARD` | `false` | 回环端口守卫（iptables OUTPUT owner-match，Linux + root，防跨用户直连子 DSH） |
 | `DSH_ADMIN_TRUST_PROXY` | `false` | 仅当部署在自控反向代理后设 `true`（否则 `X-Forwarded-For` 可伪造 rate-limit 键）；也可传代理 CIDR 列表 |
+| `DSH_ADMIN_MAX_FILE` | `1073741824` | 单个上传文件上限（字节，默认 1 GiB）；上传走 multipart 流式，不受 JSON body 限制 |
+| `DSH_ADMIN_PREVIEW_MAX` | `262144` | 文本预览最多读取的字节数（超出截断并提示） |
 
 其余可调项（`dshCommand`、`spawnAsUserCommand`、`restartBackoffMs`、`sessionTtlSeconds`、`maxUploadBytes` 等）见 `src/config.ts` 与各文档。
 
@@ -80,7 +82,7 @@ npm run smoke:shared-config    # 共享配置合并 / 删除同步 / 凭据不�
 - 每用户目录布局统一从 `src/fs/workspace.ts` 取（`workspaceRoot` / `userHomeDir` / `ensureUserDir`），不要手拼 `users/<id>/…` 路径。
 - 路由 prologue 统一用 `resolveUserPath()`（`src/web/middleware/fs-guard.ts`）：workspace 根 + 越界防护一步完成。
 - 冒烟脚本的 `assert` / `json` / `sleep` / `cleanup` 从 `scripts/helpers.mjs` 导入，勿再复制。
-- 前端桌面页的窗口拖拽/缩放/任务栏逻辑在 `web/window-manager.js`；插入用户可控文本必须过 `esc()` 转义。
+- 前端桌面页的窗口拖拽/缩放/任务栏逻辑在 `web/window-manager.js`，文件资源管理器（表格/对话框/上传/预览）在 `web/file-explorer.js`；插入用户可控文本必须过 `esc()` 转义。
 
 ## 安全
 

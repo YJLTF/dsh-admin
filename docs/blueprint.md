@@ -65,11 +65,11 @@ spawn(dshBinPath, ['--profile', 'web', '--patch', mainPatchPath, '--cwd', worksp
 |---|---|---|
 | Auth | `POST /api/auth/register\|login\|logout`、`GET /api/auth/me` | 已实现（P1） |
 | Admin | `GET /api/admin/users`、`POST /api/admin/users/:id/approve\|disable\|enable` | 已实现（P1） |
-| Desktop/FS | `GET /api/desktop/tree`、`POST /api/fs/mkdir\|upload\|create` | 已实现（P2） |
+| Desktop/FS | `GET /api/desktop/tree`、`POST /api/fs/mkdir\|create\|upload(multipart)\|delete\|rename\|move`、`GET /api/fs/read`（文本预览）、`GET /api/fs/raw`（下载/内联流，支持 Range） | 已实现（P2；上传为 multipart 流式，文件夹上传保留相对路径） |
 | DSH | `POST /api/dsh/launch\|stop\|restart`、`GET /api/dsh/status` | 已实现（P3/P5，内网直连 + forwarder；main+watchdog 编排层） |
 | Plugin | `GET /api/plugins`、`POST /api/plugins/select` | 已实现（P4） |
 | SharedConfig | `GET/PUT /api/admin/shared-config`、`GET /api/me/shared-config`、`POST /api/me/shared-config/accept` | 已实现（[shared-config.md](shared-config.md)） |
-| 静态 | `GET /*`（`web/` 下的桌面 SPA：`desktop.html` + `window-manager.js` + `shared-config-editor.js`） | 已接 |
+| 静态 | `GET /*`（`web/` 下的桌面 SPA：`desktop.html` + `window-manager.js` + `file-explorer.js` + `shared-config-editor.js`） | 已接 |
 
 ## 7. 安全模型
 
