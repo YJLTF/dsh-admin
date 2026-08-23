@@ -120,6 +120,46 @@ DROP TABLE IF EXISTS dsh_instances;
 ALTER TABLE users DROP COLUMN api_key_ref;
 `
 
+/** v7：账号/会话管理与离线插件市场 —— 会话最后活跃时间（设备列表
+ * 展示与吊销判断）、运行时应用设置（注册开关/邀请码，管理台可改、
+ * 立即生效）、市场条目与每用户安装记录；顺带删除从未写入过的
+ * `folder_plugins.description` 死列。 */
+const V7_SCHEMA = `
+ALTER TABLE sessions ADD COLUMN last_used_at INTEGER;
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS market_items (
+  id          TEXT PRIMARY KEY,
+  kind        TEXT NOT NULL CHECK (kind IN ('cordis-plugin','skill','agent-preset')),
+  name        TEXT NOT NULL,
+  version     TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  dir         TEXT NOT NULL,
+  warnings    TEXT NOT NULL DEFAULT '[]',
+  imported_at INTEGER NOT NULL,
+  UNIQUE (kind, name, version)
+);
+
+CREATE TABLE IF NOT EXISTS user_plugins (
+  user_id        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  market_item_id TEXT NOT NULL REFERENCES market_items(id) ON DELETE CASCADE,
+  kind           TEXT NOT NULL,
+  name           TEXT NOT NULL,
+  version        TEXT NOT NULL,
+  installed_at   INTEGER NOT NULL,
+  PRIMARY KEY (user_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);
+
+ALTER TABLE folder_plugins DROP COLUMN description;
+`
+
 interface Migration {
   version: number
   name: string
@@ -133,6 +173,7 @@ const MIGRATIONS: readonly Migration[] = [
   { version: 4, name: '删除凭据库', sql: V4_SCHEMA },
   { version: 5, name: '删除域名表', sql: V5_SCHEMA },
   { version: 6, name: '删除 dsh_instances 与 api_key_ref', sql: V6_SCHEMA },
+  { version: 7, name: '会话活跃/应用设置/插件市场', sql: V7_SCHEMA },
 ]
 
 /** 在单个事务内应用所有尚未应用的迁移。 */

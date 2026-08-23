@@ -50,6 +50,7 @@ async function pollFile(path, ms = 3000) {
 try {
   let r
   r = await json('/api/auth/login', { method: 'POST', body: { username: 'eve', password: 'evepass123' } })
+  assert(r.status === 200 && r.setCookie, '登录成功')
   const cookie = r.setCookie.split(';')[0]
 
   r = await json('/api/dsh/launch', { method: 'POST', cookie, body: { folder: 'proj' } })

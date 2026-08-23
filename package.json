@@ -1,6 +1,6 @@
 {
   "name": "dsh-admin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "面向局域网（Docker 部署）的多租户 DSH 托管平台：登录审核、每用户隔离的 DSH 环境（主 + 按需守护）、共享模型配置。",
   "type": "module",
   "main": "./lib/index.js",
@@ -25,9 +25,12 @@
     "smoke": "node scripts/smoke.mjs",
     "smoke:admin": "node scripts/smoke-admin.mjs",
     "smoke:auth": "node scripts/smoke-auth.mjs",
+    "smoke:account": "node scripts/smoke-account.mjs",
+    "smoke:ops": "node scripts/smoke-ops.mjs",
     "smoke:fs": "node scripts/smoke-fs.mjs",
     "smoke:dsh": "node scripts/smoke-dsh.mjs",
     "smoke:dsh-crash": "node scripts/smoke-dsh-crash.mjs",
+    "smoke:market": "node scripts/smoke-market.mjs",
     "smoke:plugins": "node scripts/smoke-plugins.mjs",
     "smoke:watchdog": "node scripts/smoke-watchdog.mjs",
     "smoke:isolation": "node scripts/smoke-isolation.mjs",
@@ -58,14 +61,18 @@
   "dependencies": {
     "@fastify/multipart": "^10.1.1",
     "@fastify/rate-limit": "^10.0.0",
-    "@fastify/static": "^8.0.0",
+    "@fastify/static": "^10.1.3",
+    "archiver": "^8.0.0",
     "better-sqlite3": "^11.10.0",
     "fastify": "^5.0.0",
+    "tar": "^7.5.22",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
+    "@types/archiver": "^8.0.0",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.10.0",
+    "@types/tar": "^6.1.13",
     "typescript": "^5.7.0"
   },
   "engines": {

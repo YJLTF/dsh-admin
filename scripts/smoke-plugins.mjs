@@ -52,6 +52,7 @@ const json = makeJson(base)
 try {
   let r
   r = await json('/api/auth/login', { method: 'POST', body: { username: 'dave', password: 'davepass123' } })
+  assert(r.status === 200 && r.setCookie, '登录成功')
   const cookie = r.setCookie.split(';')[0]
 
   r = await json('/api/plugins?folder=proj', { cookie })

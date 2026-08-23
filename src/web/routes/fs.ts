@@ -8,8 +8,10 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import { createReadStream, createWriteStream } from 'node:fs'
-import { mkdir, open, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, open, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { randomBytes } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
+import { ZipArchive } from 'archiver'
 import { basename, dirname, join, sep } from 'node:path'
 import { requireAuth } from '../middleware/authn.js'
 import { resolveUserPath, resolveWithinRoot, safeFilename } from '../middleware/fs-guard.js'
@@ -67,6 +69,20 @@ const moveSchema = {
   },
 } as const
 
+const writeSchema = {
+  body: {
+    type: 'object',
+    required: ['path', 'content'],
+    additionalProperties: false,
+    properties: {
+      path: pathSchema,
+      // 请求体上限 = 全局 bodyLimit（maxUploadBytes）；落盘再按
+      // maxFileBytes 复核一次。
+      content: { type: 'string' },
+    },
+  },
+} as const
+
 /**
  * 净化上传文件名里的相对路径（文件夹上传时浏览器会把
  * `目录/子目录/文件` 整串放进 filename 字段）。逐段校验：拒绝
@@ -117,6 +133,42 @@ function parseRange(
   }
   if (start > end || start >= size) return 'invalid'
   return { start, end }
+}
+
+/** 全局搜索结果上限：超大工作区里键盘每敲一个字符都可能触发
+ * 一次全树遍历，封顶保护响应时间与前端渲染。 */
+const SEARCH_LIMIT = 200
+
+interface SearchHit {
+  path: string
+  name: string
+  type: 'file' | 'dir'
+  size: number
+  mtimeMs: number
+}
+
+/** 递归收集名称包含 `needle`（大小写不敏感）的条目，塞满
+ * SEARCH_LIMIT 即停。符号链接目录不深入（防环）。 */
+async function searchTree(root: string, relBase: string, needle: string, out: SearchHit[]): Promise<void> {
+  if (out.length >= SEARCH_LIMIT) return
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    if (out.length >= SEARCH_LIMIT) return
+    const rel = relBase === '' ? entry.name : `${relBase}/${entry.name}`
+    if (entry.name.toLowerCase().includes(needle)) {
+      const st = await stat(join(root, entry.name)).catch(() => null)
+      out.push({
+        path: rel,
+        name: entry.name,
+        type: entry.isDirectory() ? 'dir' : 'file',
+        size: st?.isFile() ? st.size : 0,
+        mtimeMs: st?.mtimeMs ?? 0,
+      })
+    }
+    if (entry.isDirectory() && !entry.isSymbolicLink()) {
+      await searchTree(join(root, entry.name), rel, needle, out)
+    }
+  }
 }
 
 export const fsRoutes: FastifyPluginAsync = async (app) => {
@@ -206,7 +258,9 @@ export const fsRoutes: FastifyPluginAsync = async (app) => {
         if (rel === null) return reply.code(400).send({ error: 'bad_name' })
         const target = resolveWithinRoot(destAbs, rel)
         await mkdir(dirname(target), { recursive: true })
-        tmp = `${target}..uploading`
+        // 临时名带随机后缀：同一目标的并发上传不会共享半截写入
+        // （或因同时 rename 同一个临时文件而互相破坏）。
+        tmp = `${target}..uploading-${randomBytes(6).toString('hex')}`
         await pipeline(part.file, createWriteStream(tmp))
         if (part.file.truncated) {
           await rm(tmp, { force: true })
@@ -315,14 +369,12 @@ export const fsRoutes: FastifyPluginAsync = async (app) => {
     const fh = await open(p.abs, 'r').catch(() => null)
     if (fh === null) return reply.code(404).send({ error: 'not_found' })
     try {
-      const head = Buffer.alloc(Math.min(8192, entry.size))
-      await fh.read(head, 0, head.length, 0)
-      if (!isTextByExtension(entry.name) && sniffIsBinary(head)) {
-        return reply.code(415).send({ error: 'binary' })
-      }
       const cap = Math.min(entry.size, config.previewBytes)
       const buf = Buffer.alloc(cap)
       await fh.read(buf, 0, cap, 0)
+      if (!isTextByExtension(entry.name) && sniffIsBinary(cap <= 8192 ? buf : buf.subarray(0, 8192))) {
+        return reply.code(415).send({ error: 'binary' })
+      }
       return {
         name: entry.name,
         size: entry.size,
@@ -380,4 +432,79 @@ export const fsRoutes: FastifyPluginAsync = async (app) => {
       return reply.send(createReadStream(p.abs))
     },
   )
+
+  /** 文本编辑保存：覆盖写已有文件（同上传的临时文件 + 原子 rename
+   * 模式，半截写入不会破坏原文件）。目录与越界路径拒绝。 */
+  app.post('/api/fs/write', { preHandler: requireAuth, schema: writeSchema }, async (request, reply) => {
+    const { path, content } = request.body as { path: string; content: string }
+    const p = resolveEntry(request.user!.id, path)
+    if (!p.ok) return reply.code(400).send({ error: p.error })
+    if (Buffer.byteLength(content, 'utf8') > config.maxFileBytes) {
+      return reply.code(413).send({ error: 'too_large' })
+    }
+    let existing
+    try {
+      existing = await stat(p.abs)
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return reply.code(404).send({ error: 'not_found' })
+      throw err
+    }
+    if (!existing.isFile()) return reply.code(400).send({ error: 'is_dir' })
+    const tmp = `${p.abs}..editing-${randomBytes(6).toString('hex')}`
+    try {
+      await writeFile(tmp, content, 'utf8')
+      await rename(tmp, p.abs)
+    } catch (err) {
+      await rm(tmp, { force: true }).catch(() => {})
+      const code = (err as NodeJS.ErrnoException).code
+      if (code === 'ENOENT') return reply.code(404).send({ error: 'parent_missing' })
+      throw err
+    }
+    return { ok: true, size: Buffer.byteLength(content, 'utf8') }
+  })
+
+  /** 目录打包下载：流式 zip（archiver），边压缩边发送，服务器不落
+   * 临时压缩包。路径已被 fs-guard 规范在工作区内，archiver 只从该
+   * 目录读；符号链接以链接条目存储、不跟随。关闭限流与 /api/fs/raw
+   * 同理（大目录下载是长连接）。 */
+  app.get(
+    '/api/fs/zip',
+    { preHandler: requireAuth, config: { rateLimit: false } },
+    async (request, reply) => {
+      const { path = '' } = request.query as { path?: string }
+      const p = resolveUserPath(config, request.user!.id, path)
+      if (!p.ok) return reply.code(400).send({ error: 'bad_path' })
+      let st
+      try {
+        st = await stat(p.abs)
+      } catch {
+        return reply.code(404).send({ error: 'not_found' })
+      }
+      if (!st.isDirectory()) return reply.code(400).send({ error: 'is_dir' })
+      const folderName = basename(p.abs) || 'workspace'
+      // archiver v8：格式即类（ZipArchive），流式边压缩边发送。
+      const archive = new ZipArchive({ zlib: { level: 6 } })
+      archive.on('error', () => {
+        // 压缩中途出错（文件被并发删除等）：销毁底层连接，浏览器
+        // 按下载失败处理，而不是收到截断的 zip。
+        reply.raw.destroy()
+      })
+      // zip 根为目录本身，解压得到单个文件夹而不是散落一地。
+      void archive.directory(p.abs, folderName).finalize()
+      reply.header('content-type', 'application/zip')
+      reply.header('content-disposition', contentDisposition('attachment', `${folderName}.zip`))
+      return reply.send(archive)
+    },
+  )
+
+  /** 全局搜索：按名称匹配（大小写不敏感），封顶 SEARCH_LIMIT 条。 */
+  app.get('/api/fs/search', { preHandler: requireAuth }, async (request, reply) => {
+    const { q = '' } = request.query as { q?: string }
+    const needle = q.trim().toLowerCase()
+    if (needle === '') return reply.code(400).send({ error: 'empty_query' })
+    if (needle.length > 256) return reply.code(400).send({ error: 'query_too_long' })
+    const results: SearchHit[] = []
+    await searchTree(workspaceRoot(config, request.user!.id), '', needle, results)
+    return { query: q, results, hasMore: results.length >= SEARCH_LIMIT }
+  })
 }

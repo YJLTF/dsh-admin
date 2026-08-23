@@ -10,10 +10,13 @@ DSH 本身是单用户本地工具，没有认证、没有多租户隔离、Web 
 
 ## 核心能力
 
-- **登录与审核**：管理员先行（`bootstrap-admin`），用户注册后需管理员审核通过；独立管理台 UI。
-- **每用户隔离的 DSH 环境**：主 DSH 负责正常工作；崩溃时**按需拉起一次守护 DSH** 修复并自动重启；装插件重启时守护执行主 DSH 给出的 post-restart 命令。
-- **登录桌面**：文件资源管理器（文件/文件夹上传含目录结构、新建、重命名、移动、删除、预览[文本/图片/音视频/PDF]、下载）；按文件夹启动 DSH；每文件夹独立勾选启用的插件（自动检测该用户 profile 中已安装的插件，持久化并注入 cordis patch）。
+- **登录与审核**：管理员先行（`bootstrap-admin`），用户注册后需管理员审核通过；注册开关与邀请码可由管理员随时调整；独立管理台 UI。
+- **账号与会话安全**：用户自助改密（其他设备会话自动吊销）、登录设备列表与按设备吊销；管理员可重置用户密码、彻底删除用户（含全部数据）；审计日志（登录/审核/改密/插件安装等全动作，可筛选分页）。
+- **每用户隔离的 DSH 环境**：主 DSH 负责正常工作；崩溃时**按需拉起一次守护 DSH** 修复并自动重启；连续崩溃自动熔断（指数退避 + 上限，默认 5 次）后停止重拉、可手动恢复；装插件重启时守护执行主 DSH 给出的 post-restart 命令。
+- **登录桌面**：桌面为「DSH / 文件 / 管理」分组启动坞 + 独立「当前文件夹」内容区（大量文件时内部滚动；图标右键菜单支持打开/重命名/移动/下载/删除/属性；各窗口按内容预设尺寸并记忆位置，底部任务栏含管理入口）；文件资源管理器（文件/文件夹上传含目录结构、新建、重命名、移动、删除、预览[文本/图片/音视频/PDF]、文本在线编辑保存、文件夹 zip 打包下载、列表排序与全工作区搜索）；按文件夹启动/停止/重启 DSH（DSH 窗口显示当前 dsh CLI 版本）；每文件夹独立勾选启用的插件（自动检测该用户 profile 中已安装的插件，持久化并注入 cordis patch）。
+- **插件/技能离线市场**：管理员上传 GitHub 归档（.tar.gz）收录插件（cordis-plugin）/技能（SKILL.md）/agent 预设，用户在桌面一键安装/更新/卸载到自己的 DSH 环境（自动注册 cordis patch，重启生效）。
 - **内网直连访问**：`DSH_ADMIN_PUBLIC_HOST=<内网IP>` + 固定子 DSH 端口段，Docker 直接发布端口；每实例内置 forwarder（剥 Origin / 注入 `randomUUID` polyfill / 改写 loopback 门 / per-instance 访问令牌门禁）保证非安全上下文可用且不绕过登录。
+- **运维面板**：全局实例视图（谁在跑、端口、重启次数、单停不禁号）、每用户磁盘用量统计、`/healthz` 探活（Docker HEALTHCHECK 已接入）；DSH 窗口与运维面板显示当前 dsh CLI 版本（`dsh --version` 探测，约 1 分钟缓存，免重建热更新 dsh 后自动跟进）。
 - **共享模型配置**：管理员统一维护提供方与凭据，用户在桌面一键接收，叶子级合并进自己的 `settings.yaml` / `.credentials.yaml`。
 - **硬隔离**（Linux）：每用户独立 OS 账号（`setuid` 降权），`0700` 目录真正隔离跨用户读。
 
@@ -54,6 +57,8 @@ node lib/cli.js --port 3080 --db ./dev.local.db
 | `DSH_ADMIN_TRUST_PROXY` | `false` | 仅当部署在自控反向代理后设 `true`（否则 `X-Forwarded-For` 可伪造 rate-limit 键）；也可传代理 CIDR 列表 |
 | `DSH_ADMIN_MAX_FILE` | `1073741824` | 单个上传文件上限（字节，默认 1 GiB）；上传走 multipart 流式，不受 JSON body 限制 |
 | `DSH_ADMIN_PREVIEW_MAX` | `262144` | 文本预览最多读取的字节数（超出截断并提示） |
+| `DSH_ADMIN_RESTART_BACKOFF` | `1000` | 崩溃自动重启的基准退避（毫秒，指数增长、封顶 30s） |
+| `DSH_ADMIN_MAX_AUTO_RESTARTS` | `5` | 连续自动重启熔断上限（0 = 不熔断）；熔断后状态停在 crashed，可手动再启动 |
 
 其余可调项（`dshCommand`、`spawnAsUserCommand`、`restartBackoffMs`、`sessionTtlSeconds`、`maxUploadBytes` 等）见 `src/config.ts` 与各文档。
 
@@ -62,6 +67,7 @@ node lib/cli.js --port 3080 --db ./dev.local.db
 - [docs/blueprint.md](docs/blueprint.md) — 技术设计（拓扑 / 数据模型 / API / 双 DSH）
 - [docs/deployment-docker.md](docs/deployment-docker.md) — Docker 内网部署（端口规划 / 数据卷 / 运维）
 - [docs/shared-config.md](docs/shared-config.md) — 共享模型配置（提供方 / 凭据引用 / 模型输入模态）
+- [docs/plugins-market.md](docs/plugins-market.md) — 插件/技能离线市场（收录流程 / 支持类型 / 限制）
 - [docs/hard-isolation.md](docs/hard-isolation.md) — 账号级硬隔离教程
 - [docs/troubleshooting.md](docs/troubleshooting.md) — 常见问题排查（502 / 404 / 403 / 端口冲突 / Windows 启动）
 
@@ -72,7 +78,10 @@ npm run build          # tsc → lib/
 npm run typecheck      # 仅类型检查
 npm run smoke          # 端到端冒烟（fake-dsh 模拟子 DSH）
 npm run smoke:dsh-crash        # 崩溃残留清理 + 自动重启
-npm run smoke:shared-config    # 共享配置合并 / 删除同步 / 凭据不下发
+npm run smoke:account         # 注册门禁 / 改密 / 会话 / 审计 / 删用户
+npm run smoke:ops             # healthz / 实例视图 / 磁盘统计 / 崩溃熔断
+npm run smoke:market          # 插件市场 导入判定 / 安装 / 更新 / 卸载
+npm run smoke:shared-config   # 共享配置合并 / 删除同步 / 凭据不下发
 # 其余：smoke:auth / smoke:admin / smoke:fs / smoke:plugins / smoke:watchdog / smoke:isolation
 ```
 

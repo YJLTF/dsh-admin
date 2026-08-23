@@ -41,6 +41,8 @@ DSH_ADMIN_BASE_UID=100000
 | `DSH_ADMIN_ISOLATION_MODE` | `account` | 开启账号级隔离（默认 `soft`）。 |
 | `DSH_ADMIN_BASE_UID` | `100000` | 每个用户 uid 的「起始数字」。系统 uid 一般 < 1000，这里从 10 万开始，避免撞系统账号。 |
 
+> uid 由 userId 哈希派生（`baseUid + hash % 100000`），存在小概率碰撞（百名用户规模期望约一次）。碰撞会在建号时以 `useradd: UID ... is not unique` 报错暴露——此时换一段基数（如 `DSH_ADMIN_BASE_UID=200000`）重启，并为存量用户重新跑 provision（uid 变了，目录属主要跟着换）。
+
 改完**重启编排服务**让配置生效：
 
 ```sh

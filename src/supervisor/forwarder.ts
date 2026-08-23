@@ -184,6 +184,10 @@ function relayUpgrade(req: import('node:http').IncomingMessage, socket: import('
   })
   upstream.on('error', () => socket.destroy())
   socket.on('error', () => upstream.destroy())
+  // 半关闭/异常断开不一定伴随 error 事件；两侧 close 互相兜底，
+  // 否则存活一侧的 fd 会一直挂到对端超时。
+  socket.on('close', () => upstream.destroy())
+  upstream.on('close', () => socket.destroy())
 }
 
 /**
@@ -235,6 +239,13 @@ export function startForwarder(lanIp: string, port: number, token: string): Prom
       },
     )
     upstream.on('error', () => res.destroy())
+    // 客户端中途断开（响应未写完就 close）：销毁上游请求，
+    // 避免向已销毁的响应继续写入以及连接空转；响应自身的
+    // 流错误（如 DESTROY 后写入）也不允许冒泡成未处理异常。
+    res.on('error', () => upstream.destroy())
+    res.on('close', () => {
+      if (!res.writableEnded) upstream.destroy()
+    })
     req.pipe(upstream)
   })
   server.on('upgrade', (req, socket, head) => relayUpgrade(req, socket, head, port, token))

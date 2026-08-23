@@ -35,6 +35,8 @@ export interface ServerConfig {
   previewBytes: number
   /** 崩溃的子 DSH 自动重启前的延迟（毫秒）。 */
   restartBackoffMs: number
+  /** 连续自动重启的熔断上限；超过后停止自动重拉（0 = 不熔断）。 */
+  maxAutoRestarts: number
   /** 隔离级别（见 {@link IsolationMode}）。 */
   isolationMode: IsolationMode
   /** 用于降权的 argv 前缀；其中的 `{UID}`/`{GID}` 会被替换。 */
@@ -71,6 +73,7 @@ export interface ConfigOverrides {
   maxFileBytes?: number | string
   previewBytes?: number | string
   restartBackoffMs?: number | string
+  maxAutoRestarts?: number | string
   isolationMode?: IsolationMode | string
   spawnAsUserCommand?: string[]
   baseUid?: number | string
@@ -91,6 +94,7 @@ const DEFAULT_MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 const DEFAULT_MAX_FILE_BYTES = 1024 * 1024 * 1024
 const DEFAULT_PREVIEW_BYTES = 256 * 1024
 const DEFAULT_RESTART_BACKOFF_MS = 1000
+const DEFAULT_MAX_AUTO_RESTARTS = 5
 const DEFAULT_ISOLATION_MODE: IsolationMode = 'soft'
 const DEFAULT_SPAWN_AS_USER_COMMAND = [
   'setpriv',
@@ -108,6 +112,27 @@ const DEFAULT_ENABLE_PATCH = false
 function toBool(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) return fallback
   return value === 'true' || value === '1'
+}
+
+/** 解析数字覆盖项；非法取值（NaN/Infinity）在启动时报清晰错误，
+ * 而不是静默穿透 —— 例如 NaN 的会话 TTL 会造出永不过期的会话，
+ * NaN 的端口让 listen 以晦涩的方式失败。 */
+function toNumber(value: number | string | undefined, fallback: number, name: string, min: number): number {
+  const raw = value ?? fallback
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n) || n < min) {
+    throw new Error(`无效的${name}：${JSON.stringify(String(raw))}（应为 ≥ ${min} 的数字）`)
+  }
+  return n
+}
+
+/** 解析端口覆盖项（0 = 临时端口）。 */
+function toPort(value: number | string | undefined, fallback: number, name: string): number {
+  const n = toNumber(value, fallback, name, 0)
+  if (!Number.isInteger(n) || n > 65535) {
+    throw new Error(`无效的${name}：${n}（应为 0-65535 的整数端口）`)
+  }
+  return n
 }
 
 /** 把命令字符串切分为 argv 词元，支持双引号包裹的片段
@@ -147,45 +172,81 @@ function toTrustProxy(value: string | undefined): boolean | string {
 export function resolveConfig(overrides: ConfigOverrides = {}): ServerConfig {
   const dataRoot =
     overrides.dataRoot ?? process.env.DSH_ADMIN_DATA_ROOT ?? join(homedir(), '.dsh-admin')
-  const port = overrides.port ?? process.env.DSH_ADMIN_PORT ?? DEFAULT_PORT
+  const port = toPort(overrides.port ?? process.env.DSH_ADMIN_PORT ?? DEFAULT_PORT, DEFAULT_PORT, '绑定端口')
   const dshBin = process.env.DSH_ADMIN_DSH_BIN
   const isolationMode =
     toIsolationMode(overrides.isolationMode) ??
     toIsolationMode(process.env.DSH_ADMIN_ISOLATION_MODE) ??
     DEFAULT_ISOLATION_MODE
+  const dshPortMin = toPort(
+    overrides.dshPortMin ?? process.env.DSH_ADMIN_DSH_PORT_MIN ?? 0,
+    0,
+    '子 DSH 端口下限',
+  )
+  const dshPortMax = toPort(
+    overrides.dshPortMax ?? process.env.DSH_ADMIN_DSH_PORT_MAX ?? 0,
+    0,
+    '子 DSH 端口上限',
+  )
+  if ((dshPortMin === 0) !== (dshPortMax === 0) || (dshPortMin > 0 && dshPortMin > dshPortMax)) {
+    throw new Error(
+      `无效的子 DSH 端口范围 ${dshPortMin}-${dshPortMax}（MIN/MAX 应同时为 0，或均为 1-65535 且 MIN ≤ MAX）`,
+    )
+  }
+  const baseUid = toNumber(overrides.baseUid ?? process.env.DSH_ADMIN_BASE_UID ?? DEFAULT_BASE_UID, DEFAULT_BASE_UID, 'uid 基数', 0)
+  if (!Number.isInteger(baseUid)) {
+    throw new Error(`无效的 uid 基数：${baseUid}（应为整数）`)
+  }
   return {
     host: overrides.host ?? process.env.DSH_ADMIN_HOST ?? DEFAULT_HOST,
-    port: typeof port === 'number' ? port : Number(port),
+    port,
     dbPath: overrides.dbPath ?? join(dataRoot, 'server-login.db'),
     dataRoot,
     dshCommand: overrides.dshCommand ?? (dshBin !== undefined && dshBin !== '' ? parseCommandString(dshBin) : DEFAULT_DSH_COMMAND),
     logLevel: overrides.logLevel ?? DEFAULT_LOG_LEVEL,
-    sessionTtlSeconds: Number(
+    sessionTtlSeconds: toNumber(
       overrides.sessionTtlSeconds ?? process.env.DSH_ADMIN_SESSION_TTL ?? DEFAULT_SESSION_TTL_SECONDS,
+      DEFAULT_SESSION_TTL_SECONDS,
+      '会话有效期（秒）',
+      1,
     ),
-    maxUploadBytes: Number(
+    maxUploadBytes: toNumber(
       overrides.maxUploadBytes ?? process.env.DSH_ADMIN_MAX_UPLOAD ?? DEFAULT_MAX_UPLOAD_BYTES,
+      DEFAULT_MAX_UPLOAD_BYTES,
+      'JSON 请求体上限（字节）',
+      1,
     ),
-    maxFileBytes: Number(
+    maxFileBytes: toNumber(
       overrides.maxFileBytes ?? process.env.DSH_ADMIN_MAX_FILE ?? DEFAULT_MAX_FILE_BYTES,
+      DEFAULT_MAX_FILE_BYTES,
+      '单文件上传上限（字节）',
+      1,
     ),
-    previewBytes: Number(
+    previewBytes: toNumber(
       overrides.previewBytes ?? process.env.DSH_ADMIN_PREVIEW_MAX ?? DEFAULT_PREVIEW_BYTES,
+      DEFAULT_PREVIEW_BYTES,
+      '文本预览上限（字节）',
+      1,
     ),
-    restartBackoffMs: Number(
+    restartBackoffMs: toNumber(
       overrides.restartBackoffMs ?? process.env.DSH_ADMIN_RESTART_BACKOFF ?? DEFAULT_RESTART_BACKOFF_MS,
+      DEFAULT_RESTART_BACKOFF_MS,
+      '重启退避（毫秒）',
+      0,
+    ),
+    maxAutoRestarts: toNumber(
+      overrides.maxAutoRestarts ?? process.env.DSH_ADMIN_MAX_AUTO_RESTARTS ?? DEFAULT_MAX_AUTO_RESTARTS,
+      DEFAULT_MAX_AUTO_RESTARTS,
+      '自动重启熔断上限',
+      0,
     ),
     isolationMode,
     spawnAsUserCommand: overrides.spawnAsUserCommand ?? DEFAULT_SPAWN_AS_USER_COMMAND,
-    baseUid: Number(overrides.baseUid ?? process.env.DSH_ADMIN_BASE_UID ?? DEFAULT_BASE_UID),
+    baseUid,
     enablePatch: overrides.enablePatch ?? toBool(process.env.DSH_ADMIN_ENABLE_PATCH, DEFAULT_ENABLE_PATCH),
     publicHost: overrides.publicHost ?? process.env.DSH_ADMIN_PUBLIC_HOST ?? '',
-    dshPortMin: Number(
-      overrides.dshPortMin ?? process.env.DSH_ADMIN_DSH_PORT_MIN ?? 0,
-    ),
-    dshPortMax: Number(
-      overrides.dshPortMax ?? process.env.DSH_ADMIN_DSH_PORT_MAX ?? 0,
-    ),
+    dshPortMin,
+    dshPortMax,
     portGuard: overrides.portGuard ?? toBool(process.env.DSH_ADMIN_PORT_GUARD, false),
     trustProxy: overrides.trustProxy ?? toTrustProxy(process.env.DSH_ADMIN_TRUST_PROXY),
   }

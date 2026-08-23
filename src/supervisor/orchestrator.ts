@@ -39,18 +39,35 @@ export interface Instance {
   port?: number
   status: InstanceStatus
   pid?: number
+  startedAt: number
   exitCode?: number
   lastError?: string
   patchPath?: string
+  /** 连续自动重启次数；就绪成功或手动（重）启动时归零。供熔断与展示。 */
+  restarts?: number
   /** 内网模式下转发器的访问令牌；随每次（重）拉起轮换。
    * 仅通过已认证的 API（launch/restart/status 返回的 url）交付给属主。 */
   token?: string
+}
+
+/** 管理台全局实例视图的单行快照。 */
+export interface InstanceSummary {
+  userId: string
+  role: InstanceRole
+  status: InstanceStatus
+  port?: number
+  pid?: number
+  startedAt: number
+  restarts: number
+  lastError?: string
 }
 
 /** 就绪探测参数：间隔与最长探测时长（超时后保持 starting，
  * 不臆造崩溃 —— 进程活着但未监听是可见的、可停止的状态）。 */
 const READY_PROBE_INTERVAL_MS = 150
 const READY_PROBE_TIMEOUT_MS = 60_000
+/** 单次连接探测的挂起上限（超出按未就绪处理，防止轮询循环卡死）。 */
+const READY_PROBE_CONNECT_TIMEOUT_MS = 2_000
 
 /** 子进程的环回监听是否已接受 TCP 连接（握手成功即就绪）。 */
 function probePort(port: number): Promise<boolean> {
@@ -62,6 +79,49 @@ function probePort(port: number): Promise<boolean> {
     }
     socket.once('connect', () => done(true))
     socket.once('error', () => done(false))
+    // 过滤型防火墙规则可能让 SYN 无响应地挂起；超时按未就绪处理，
+    // 交回轮询循环（整体仍受 READY_PROBE_TIMEOUT_MS 约束）。
+    socket.setTimeout(READY_PROBE_CONNECT_TIMEOUT_MS, () => done(false))
+  })
+}
+
+/** dsh CLI 版本探测的缓存窗口与单次探测超时。 */
+const DSH_VERSION_TTL_MS = 60_000
+const DSH_VERSION_TIMEOUT_MS = 4_000
+
+/** 运行 `<dshCommand> --version` 并取首个非空行（stdout/stderr 合并）。
+ * 退出码不敏感（老 CLI 可能以 usage 退出但仍打印版本）；无输出、启动
+ * 失败（如 ENOENT）或超时都返回 null —— 版本未知不是服务器错误。 */
+function probeDshVersion(command: string[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    const [cmd = 'dsh', ...prefix] = command
+    let out = ''
+    let done = false
+    // 版本探测不经过 setuid 包装：读 --version 不触及任何用户资源。
+    const child = spawn(cmd, [...prefix, '--version'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: scrubEnv(process.env),
+    })
+    const timer = setTimeout(() => child.kill('SIGKILL'), DSH_VERSION_TIMEOUT_MS)
+    timer.unref()
+    const finish = (): void => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      const line = out
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .find((l) => l !== '')
+      resolve(line === undefined ? null : line.slice(0, 80))
+    }
+    child.stdout?.on('data', (chunk: Buffer) => {
+      out += chunk.toString()
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      out += chunk.toString()
+    })
+    child.on('error', finish)
+    child.on('close', finish)
   })
 }
 
@@ -101,6 +161,11 @@ export class Supervisor {
   /** 缓存的非内部 IPv4（可发布网卡）；null = 无。 */
   private lanIp: string | null = null
   private readonly portGuard: PortGuard | undefined
+  /** dsh CLI 版本探测结果缓存；null 值也缓存（二进制缺失时状态轮询
+   * 不应每次都空跑一次探测）。 */
+  private dshVersionCache: { value: string | null; at: number } | null = null
+  /** 进行中的版本探测（并发去重：同时到达的多个请求共享一次探测）。 */
+  private dshVersionProbe: Promise<string | null> | null = null
 
   constructor(private readonly config: ServerConfig) {
     this.portGuard = createPortGuard(config.portGuard)
@@ -140,9 +205,44 @@ export class Supervisor {
     return { main: this.mains.get(userId), watchdog: this.watchdogs.get(userId) }
   }
 
+  /** 全部被跟踪实例的快照（管理台全局视图；主实例在前）。 */
+  listInstances(): InstanceSummary[] {
+    const summarize = (instance: Instance): InstanceSummary => ({
+      userId: instance.userId,
+      role: instance.role,
+      status: instance.status,
+      port: instance.port,
+      pid: instance.pid,
+      startedAt: instance.startedAt,
+      restarts: instance.restarts ?? 0,
+      lastError: instance.lastError,
+    })
+    return [...this.mains.values()].map(summarize).concat([...this.watchdogs.values()].map(summarize))
+  }
+
   /** 用户运行中主 DSH 的环回端口（若有）。 */
   portFor(userId: string): number | undefined {
     return this.mains.get(userId)?.port
+  }
+
+  /** 当前 dsh CLI 的版本行（`dsh --version` 首行）；探测失败为 null。
+   * dsh 二进制支持免重建热更新（bind mount 替换），因此结果按 TTL
+   * 过期重探，而不是只在进程启动时探测一次。 */
+  async dshVersion(): Promise<string | null> {
+    if (this.dshVersionCache !== null && Date.now() - this.dshVersionCache.at < DSH_VERSION_TTL_MS) {
+      return this.dshVersionCache.value
+    }
+    if (this.dshVersionProbe === null) {
+      this.dshVersionProbe = probeDshVersion(this.config.dshCommand)
+        .then((value) => {
+          this.dshVersionCache = { value, at: Date.now() }
+          return value
+        })
+        .finally(() => {
+          this.dshVersionProbe = null
+        })
+    }
+    return this.dshVersionProbe
   }
 
   /** 停止用户的两个进程（取消任何待处理的重启）。 */
@@ -183,32 +283,51 @@ export class Supervisor {
     }
   }
 
-  private async spawnInstance(userId: string, role: InstanceRole, folder: string, patchPath?: string): Promise<Instance> {
-    const port = role === 'main' ? await findFreePort(this.config.dshPortMin, this.config.dshPortMax) : undefined
+  private async spawnInstance(
+    userId: string,
+    role: InstanceRole,
+    folder: string,
+    patchPath?: string,
+    carryRestarts = 0,
+  ): Promise<Instance> {
     // 令牌与端口同生命周期：崩溃重启（新端口）自然换新令牌；
     // 手动重启也换新 —— 旧链接立即作废，无残留窗口。
-    const token = role === 'main' && this.config.publicHost !== '' ? randomBytes(32).toString('base64url') : undefined
     const instance: Instance = {
       id: randomUUID(),
       userId,
       role,
       folder,
-      port,
       status: 'starting',
+      startedAt: Date.now(),
+      restarts: carryRestarts,
       patchPath,
-      token,
+      token: role === 'main' && this.config.publicHost !== '' ? randomBytes(32).toString('base64url') : undefined,
     }
+    // 先同步占住槽位再 await：否则两次并发 launch 会在 findFreePort
+    // 的 await 处交错通过“已有运行中实例”检查，各自 spawn 一个子进程
+    // （其中一个从此脱离管理）。
     const map = role === 'main' ? this.mains : this.watchdogs
     map.set(userId, instance)
+    if (role === 'main') {
+      try {
+        instance.port = await findFreePort(this.config.dshPortMin, this.config.dshPortMax)
+      } catch (err) {
+        // 端口范围耗尽等后台失败要反映到实例上（crashed 可被再次
+        // launch 清理），而不是留下一个永远 starting 的占位条目。
+        instance.status = 'crashed'
+        instance.lastError = err instanceof Error ? err.message : String(err)
+        throw err
+      }
+    }
 
     const [command = 'dsh', ...args] = this.config.dshCommand
     const launchArgs = ['--profile', role === 'main' ? MAIN_PROFILE : 'headless']
     if (role === 'main') {
       // dsh CLI 刻意拒绝 --host 0.0.0.0（RCE 暴露防护），因此子进程
       // 始终绑定环回。在内网模式（publicHost）下直接发布子端口；
-      // 每个主实例一个 socat 转发器，把容器的 eth0 桥接到该环回监听
-      // （见 spawnForwarder）。
-      launchArgs.push('--host', '127.0.0.1', '--port', String(port))
+      // 每个主实例一个进程内 HTTP/WS 转发器，把容器的 eth0 桥接到该
+      // 环回监听（见 forwarder.ts）。
+      launchArgs.push('--host', '127.0.0.1', '--port', String(instance.port))
       // --patch 需要支持它的 dsh CLI；默认关闭，这样子进程在较老的
       // dsh 版本上也能启动。
       if (this.config.enablePatch && patchPath !== undefined) launchArgs.push('--patch', patchPath)
@@ -222,12 +341,14 @@ export class Supervisor {
       DSH_ADMIN_HANDOFF_PATH: this.handoffPath(userId), // 两种角色：main 写入，watchdog 读取
     }
     if (role === 'main') {
-      env.DSH_ADMIN_PORT = String(port)
+      env.DSH_ADMIN_PORT = String(instance.port)
     }
 
     const child = this.spawnAsUser(userId, command, [...args, ...launchArgs], { cwd: folder, env })
     this.trackChild(userId, instance, child)
-    if (role === 'main' && port !== undefined && token !== undefined) this.syncForwarder(userId, port, token)
+    if (role === 'main' && instance.port !== undefined && instance.token !== undefined) {
+      this.syncForwarder(userId, instance.port, instance.token)
+    }
     return instance
   }
 
@@ -314,6 +435,9 @@ export class Supervisor {
       instance.status = 'crashed'
       instance.lastError = err.message
       this.children.delete(instance.id)
+      // spawn 失败（如 ENOENT）不会触发 exit；看门狗的一次性槽位
+      // 不在这里清掉的话，后续 spawnWatchdog 会一直拿到死条目。
+      if (instance.role === 'watchdog') this.watchdogs.delete(userId)
     })
     child.on('exit', (code) => {
       instance.exitCode = code ?? undefined
@@ -352,22 +476,30 @@ export class Supervisor {
     })
   }
 
-  /** 把后台拉起失败（例如端口范围耗尽）反映到实例上，
-   * 而不是以未处理的 rejection 让编排器崩溃。 */
-  private markSpawnFailed(userId: string, role: InstanceRole, err: unknown): void {
-    const map = role === 'main' ? this.mains : this.watchdogs
-    const instance = map.get(userId)
-    if (instance === undefined) return
-    instance.status = 'crashed'
-    instance.lastError = err instanceof Error ? err.message : String(err)
-  }
-
   private scheduleRestart(userId: string, instance: Instance): void {
+    const restarts = (instance.restarts ?? 0) + 1
+    const max = this.config.maxAutoRestarts
+    if (max > 0 && restarts > max) {
+      // 熔断：自动重启上限已到仍持续崩溃，停止重拉等用户处理。
+      // 条目留在 map 里保持 crashed（可被 launch 清理重启）。
+      instance.restarts = restarts
+      instance.lastError = `已自动重启 ${restarts - 1} 次仍持续崩溃，停止自动重启（熔断）；请检查子进程日志后手动启动`
+      return
+    }
+    instance.restarts = restarts
+    // 指数退避（封顶 30s）：持续失败时 1s 固定延迟会让崩溃循环以
+    // 全速空转，退避把无效重启的资源消耗压下来。
+    const delay = Math.min(this.config.restartBackoffMs * 2 ** (restarts - 1), 30_000)
     const timer = setTimeout(() => {
       this.restartTimers.delete(userId)
-      this.spawnInstance(userId, instance.role, instance.folder, instance.patchPath)
-        .catch((err: unknown) => this.markSpawnFailed(userId, instance.role, err))
-    }, this.config.restartBackoffMs)
+      this.spawnInstance(userId, instance.role, instance.folder, instance.patchPath, restarts).catch(
+        (err: unknown) => {
+          // spawnInstance 已把失败写进实例（crashed + lastError）；
+          // 这里只需让重启失败在日志里可见。
+          process.stderr.write(`[restart ${userId}] ${String(err)}\n`)
+        },
+      )
+    }, delay)
     timer.unref()
     this.restartTimers.set(userId, timer)
   }
@@ -379,7 +511,11 @@ export class Supervisor {
     while (instance.status === 'starting' && Date.now() < deadline) {
       if (await probePort(instance.port!)) {
         // 仅当仍是同一个 starting 实例时转 running（探测期间可能已崩溃/停止）。
-        if (instance.status === 'starting') instance.status = 'running'
+        if (instance.status === 'starting') {
+          instance.status = 'running'
+          // 服务真正可用 = 本轮崩溃循环结束，熔断计数归零。
+          instance.restarts = 0
+        }
         return
       }
       await new Promise((resolve) => setTimeout(resolve, READY_PROBE_INTERVAL_MS))

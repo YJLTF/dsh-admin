@@ -30,7 +30,9 @@ function initSharedConfigEditor(onSaved) {
 
   function removeBtn(target) {
     const btn = document.createElement('button')
-    btn.className = 'btn small danger'
+    btn.className = 'btn mini-del'
+    btn.type = 'button'
+    btn.setAttribute('aria-label', '删除此行')
     btn.textContent = '×'
     btn.onclick = () => target.remove()
     return btn
@@ -111,14 +113,20 @@ function initSharedConfigEditor(onSaved) {
     const card = document.createElement('div')
     card.className = 'prov-card'
 
+    // 头部：固定标签 + 路由名徽章（随输入实时更新）+ 删除按钮。
     const head = document.createElement('div')
     head.className = 'prov-head'
     const title = document.createElement('span')
     title.className = 't'
     title.textContent = '提供方'
-    head.append(title, removeBtn(card))
+    const chip = document.createElement('span')
+    chip.className = 'prov-chip'
+    chip.title = '路由名'
+    chip.textContent = p.route || '未命名'
+    head.append(title, chip, removeBtn(card))
 
     const routeIn = textInput(p.route || '', '例如 deepseek')
+    routeIn.addEventListener('input', () => { chip.textContent = routeIn.value.trim() || '未命名' })
     const nameIn = textInput(p.displayName || '', '例如 DeepSeek 官方')
     const apiIn = textInput(p.api || '', '例如 openai-completions')
     apiIn.setAttribute('list', 'dshApiProtocols')
@@ -193,19 +201,27 @@ function initSharedConfigEditor(onSaved) {
   document.getElementById('addCredBtn').onclick = () => credBody.appendChild(credRow())
 
   async function loadShared() {
-    const res = await fetch('/api/admin/shared-config')
-    if (!res.ok) return
-    const body = await res.json()
-    provBox.innerHTML = ''
-    credBody.innerHTML = ''
-    for (const [route, profile] of Object.entries(body.payload.providers || {})) provBox.appendChild(providerCard({ route, ...profile }))
-    for (const [ref, key] of Object.entries(body.payload.credentials || {})) credBody.appendChild(credRow(ref, key))
-    const meta = []
-    if (body.version > 0) { meta.push('v' + body.version); meta.push(body.acceptances + ' 人已接收') } else meta.push('尚未配置')
-    document.getElementById('sharedMeta').textContent = meta.join(' · ')
+    // 这里的失败只降级本编辑器，不能让未捕获的 rejection
+    // 中断桌面其余初始化（desktop 的 init 是串行 await 的）。
+    try {
+      const res = await fetch('/api/admin/shared-config')
+      if (!res.ok) return
+      const body = await res.json()
+      provBox.innerHTML = ''
+      credBody.innerHTML = ''
+      for (const [route, profile] of Object.entries(body.payload.providers || {})) provBox.appendChild(providerCard({ route, ...profile }))
+      for (const [ref, key] of Object.entries(body.payload.credentials || {})) credBody.appendChild(credRow(ref, key))
+      const meta = []
+      if (body.version > 0) { meta.push('v' + body.version); meta.push(body.acceptances + ' 人已接收') } else meta.push('尚未配置')
+      document.getElementById('sharedMeta').textContent = meta.join(' · ')
+    } catch {
+      document.getElementById('sharedMeta').textContent = '加载失败'
+    }
   }
 
-  document.getElementById('saveSharedBtn').addEventListener('click', async () => {
+  document.getElementById('saveSharedBtn').addEventListener('click', async (event) => {
+    const btn = event.currentTarget
+    if (btn.disabled) return
     msg.textContent = ''
     msg.className = 'msg'
     const providers = {}, credentials = {}
@@ -217,19 +233,28 @@ function initSharedConfigEditor(onSaved) {
       const { ref, key } = tr._read()
       if (ref && key) credentials[ref] = key
     }
-    const res = await fetch('/api/admin/shared-config', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ payload: { providers, credentials } }),
-    })
-    if (res.ok) {
-      msg.textContent = '已保存（v' + (await res.json()).version + '）；已接收的用户会看到更新提示'
-      await loadShared()
-      if (onSaved) await onSaved()
-    } else {
-      const e = await res.json().catch(() => ({}))
-      msg.textContent = '保存失败：' + (e.detail || e.error || res.status)
+    // 防重复提交：双击不会连发两次 PUT（版本号跳两版 + 两次提示）。
+    btn.disabled = true
+    try {
+      const res = await fetch('/api/admin/shared-config', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ payload: { providers, credentials } }),
+      })
+      if (res.ok) {
+        msg.textContent = '已保存（v' + (await res.json()).version + '）；已接收的用户会看到更新提示'
+        await loadShared()
+        if (onSaved) await onSaved()
+      } else {
+        const e = await res.json().catch(() => ({}))
+        msg.textContent = '保存失败：' + (e.detail || e.error || res.status)
+        msg.classList.add('err')
+      }
+    } catch {
+      msg.textContent = '保存失败：网络错误'
       msg.classList.add('err')
+    } finally {
+      btn.disabled = false
     }
   })
 
