@@ -24,68 +24,94 @@
         </div>
       </div>
 
-      <div class="desk-path">
-        <button class="btn ghost small back" id="backBtn">← 返回</button>
-        <span class="loc" id="deskPath">我的桌面 / 根目录</span>
-      </div>
-
       <div class="icons">
-        <div class="desk-icon" data-open="dsh" role="button" tabindex="0">
-          <div class="tile dsh"><img src="/deepseek.webp" alt="DSH" /></div>
-          <span class="label">DSH</span>
+        <div class="desk-launch">
+          <section class="desk-group" aria-label="DSH">
+            <h3 class="desk-group-label">DSH</h3>
+            <div class="desk-group-items">
+              <div class="desk-icon" data-open="dsh" role="button" tabindex="0">
+                <div class="tile dsh"><img src="/deepseek.webp" alt="DSH" /></div>
+                <span class="label">DSH</span>
+              </div>
+            </div>
+          </section>
+          <section class="desk-group" aria-label="文件">
+            <h3 class="desk-group-label">文件</h3>
+            <div class="desk-group-items">
+              <div class="desk-icon" data-open="files" role="button" tabindex="0">
+                <div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+                <span class="label">我的文件</span>
+              </div>
+              <div class="desk-icon" data-app="upload" role="button" tabindex="0">
+                <div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
+                <span class="label">上传文件</span>
+              </div>
+              <div class="desk-icon" data-app="uploaddir" role="button" tabindex="0">
+                <div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 16v-5"/><path d="M10 13l2-2 2 2"/></svg></div>
+                <span class="label">上传文件夹</span>
+              </div>
+              <div class="desk-icon" data-app="newfile" role="button" tabindex="0">
+                <div class="tile file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v5M9.5 14.5h5"/></svg></div>
+                <span class="label">新建文件</span>
+              </div>
+            </div>
+          </section>
+          <section class="desk-group hidden" id="adminGroup" aria-label="管理">
+            <h3 class="desk-group-label">管理</h3>
+            <div class="desk-group-items">
+              <div class="desk-icon" id="adminIcon" data-open="admin" role="button" tabindex="0">
+                <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg></div>
+                <span class="label">用户管理</span>
+              </div>
+              <div class="desk-icon" id="sharedIcon" data-open="shared" role="button" tabindex="0">
+                <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></div>
+                <span class="label">共享配置</span>
+              </div>
+              <div class="desk-icon" id="opsIcon" data-open="ops" role="button" tabindex="0">
+                <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
+                <span class="label">运维监控</span>
+              </div>
+              <div class="desk-icon" id="auditIcon" data-open="audit" role="button" tabindex="0">
+                <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-7-4-7 4z"/></svg></div>
+                <span class="label">审计日志</span>
+              </div>
+              <div class="desk-icon" id="marketIcon" data-open="market" role="button" tabindex="0">
+                <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 13h6"/></svg></div>
+                <span class="label">插件市场</span>
+              </div>
+              <div class="desk-icon" id="settingsIcon" data-open="settings" role="button" tabindex="0">
+                <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div>
+                <span class="label">系统设置</span>
+              </div>
+            </div>
+          </section>
         </div>
-        <div class="desk-icon" data-app="upload" role="button" tabindex="0">
-          <div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
-          <span class="label">上传文件</span>
-        </div>
-        <div class="desk-icon" data-app="uploaddir" role="button" tabindex="0">
-          <div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 16v-5"/><path d="M10 13l2-2 2 2"/></svg></div>
-          <span class="label">上传文件夹</span>
-        </div>
-        <div class="desk-icon" data-app="newfile" role="button" tabindex="0">
-          <div class="tile file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v5M9.5 14.5h5"/></svg></div>
-          <span class="label">新建文件</span>
-        </div>
-        <div class="desk-icon" data-open="files" role="button" tabindex="0">
-          <div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
-          <span class="label">我的文件</span>
-        </div>
-        <div class="desk-icon hidden" id="adminIcon" data-open="admin" role="button" tabindex="0">
-          <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg></div>
-          <span class="label">用户管理</span>
-        </div>
-        <div class="desk-icon hidden" id="sharedIcon" data-open="shared" role="button" tabindex="0">
-          <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></div>
-          <span class="label">共享配置</span>
-        </div>
-        <div class="desk-icon hidden" id="opsIcon" data-open="ops" role="button" tabindex="0">
-          <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
-          <span class="label">运维监控</span>
-        </div>
-        <div class="desk-icon hidden" id="marketIcon" data-open="market" role="button" tabindex="0">
-          <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 13h6"/></svg></div>
-          <span class="label">插件市场</span>
-        </div>
-        <div class="desk-icon hidden" id="auditIcon" data-open="audit" role="button" tabindex="0">
-          <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-7-4-7 4z"/></svg></div>
-          <span class="label">审计日志</span>
-        </div>
-        <div class="desk-icon hidden" id="settingsIcon" data-open="settings" role="button" tabindex="0">
-          <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div>
-          <span class="label">系统设置</span>
-        </div>
-        <div class="desk-divider"></div>
-        <div id="fileIcons"></div>
+        <section class="desk-folder" aria-label="当前文件夹">
+          <div class="desk-folder-head">
+            <button class="btn ghost small back hidden" id="backBtn">← 返回</button>
+            <svg class="desk-folder-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            <h3 class="desk-group-label">当前文件夹</h3>
+            <span class="desk-folder-count" id="folderCount"></span>
+            <span class="desk-folder-path" id="deskPath">我的桌面 / 根目录</span>
+          </div>
+          <div class="desk-folder-body" id="fileIcons"></div>
+        </section>
       </div>
 
       <div class="taskbar">
         <div class="app" data-open="dsh" role="button" tabindex="0" aria-label="DSH"><img src="/deepseek.webp" alt="DSH" /></div>
+        <span class="tsep" aria-hidden="true"></span>
+        <div class="app" data-open="files" role="button" tabindex="0" aria-label="我的文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
         <div class="app" data-app="upload" role="button" tabindex="0" aria-label="上传文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
         <div class="app" data-app="uploaddir" role="button" tabindex="0" aria-label="上传文件夹"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 16v-5"/><path d="M10 13l2-2 2 2"/></svg></div>
         <div class="app" data-app="newfile" role="button" tabindex="0" aria-label="新建文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v5M9.5 14.5h5"/></svg></div>
-        <div class="app" data-open="files" role="button" tabindex="0" aria-label="我的文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <span class="tsep hidden" id="adminTaskSep" aria-hidden="true"></span>
         <div class="app hidden" id="adminTask" data-open="admin" role="button" tabindex="0" aria-label="用户管理"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/></svg></div>
         <div class="app hidden" id="sharedTask" data-open="shared" role="button" tabindex="0" aria-label="共享配置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></div>
+        <div class="app hidden" id="opsTask" data-open="ops" role="button" tabindex="0" aria-label="运维监控" title="运维监控"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
+        <div class="app hidden" id="auditTask" data-open="audit" role="button" tabindex="0" aria-label="审计日志" title="审计日志"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-7-4-7 4z"/></svg></div>
+        <div class="app hidden" id="marketTask" data-open="market" role="button" tabindex="0" aria-label="插件市场" title="插件市场"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 13h6"/></svg></div>
+        <div class="app hidden" id="settingsTask" data-open="settings" role="button" tabindex="0" aria-label="系统设置" title="系统设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div>
         <span class="clock" id="clock"></span>
       </div>
     </div>
@@ -136,6 +162,28 @@
       </div>
     </div>
 
+    <!-- 桌面图标右键菜单（触屏设备由 JS 跳过，保留原生行为） -->
+    <div id="ctxMenu" class="ctx-menu hidden" role="menu" aria-label="文件操作">
+      <button class="ctx-item" data-act="open" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>打开</span></button>
+      <button class="ctx-item" data-act="rename" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg><span>重命名</span></button>
+      <button class="ctx-item" data-act="move" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg><span>移动到…</span></button>
+      <button class="ctx-item" data-act="download" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span>下载</span></button>
+      <div class="ctx-sep" role="separator"></div>
+      <button class="ctx-item danger" data-act="delete" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg><span>删除</span></button>
+      <button class="ctx-item" data-act="props" role="menuitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg><span>属性</span></button>
+    </div>
+
+    <!-- 属性对话框（只读信息卡） -->
+    <div id="propsDialog" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="ppTitle">
+      <div class="modal-card props-card">
+        <h3 id="ppTitle">属性</h3>
+        <dl id="propsBody" class="props-list"></dl>
+        <div class="row-actions modal-actions">
+          <button class="btn primary" id="propsClose">关闭</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 预览对话框 -->
     <div id="previewModal" class="modal hidden preview-modal" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
       <div class="modal-card">
@@ -146,10 +194,10 @@
         <div class="preview-body" id="previewBody"></div>
         <div class="row-actions modal-actions">
           <span class="hint" style="flex:1"></span>
-          <button class="btn ghost hidden" id="previewEdit">编辑</button>
-          <button class="btn primary hidden" id="previewSave">保存修改</button>
-          <button class="btn ghost hidden" id="previewCancelEdit">取消编辑</button>
-          <button class="btn primary hidden" id="previewDownload">下载</button>
+          <button class="btn ghost hidden" id="previewEdit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>编辑</button>
+          <button class="btn primary hidden" id="previewSave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>保存修改</button>
+          <button class="btn ghost hidden" id="previewCancelEdit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>取消编辑</button>
+          <button class="btn primary hidden" id="previewDownload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>下载</button>
         </div>
       </div>
     </div>
@@ -176,12 +224,14 @@
           <button class="btn ghost small" id="sharedDismissBtn">暂不</button>
         </div>
         <div class="stat" id="dshState"><span class="dot off"></span> 未运行</div>
-        <div class="row-actions">
-          <button class="btn primary" id="launchBtn">启动 DSH</button>
-          <button class="btn ghost hidden" id="stopBtn">停止</button>
-          <button class="btn ghost hidden" id="restartBtn">重启</button>
-          <button class="btn ghost hidden" id="openDshBtn">打开 DSH ↗</button>
-          <button class="btn ghost" id="managePluginsBtn">管理插件</button>
+        <div class="row-actions dsh-controls" role="group" aria-label="DSH 生命周期">
+          <button class="btn primary" id="launchBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 5l12 7-12 7z"/></svg><span id="launchBtnText">启动 DSH</span></button>
+          <button class="btn go hidden" id="openDshBtn">打开 DSH<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg></button>
+          <button class="btn ghost hidden" id="restartBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 9"/><path d="M23 4v5h-5"/></svg>重启</button>
+          <button class="btn danger-soft hidden" id="stopBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>停止</button>
+        </div>
+        <div class="row-actions dsh-more">
+          <button class="btn ghost small" id="managePluginsBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/></svg>管理插件</button>
         </div>
         <div class="section-label">在此文件夹启动：<span id="dshFolder">根目录</span></div>
         <div class="hidden" id="pluginPanel">
@@ -207,12 +257,23 @@
         <div class="controls"><button class="close" onclick="WindowManager.closeWindow('files')" aria-label="关闭窗口">✕</button></div>
       </div>
       <div class="window-body">
-        <div class="pathbar">
-          <button class="btn ghost small" data-app="upload">上传文件</button>
-          <button class="btn ghost small" data-app="uploaddir">上传文件夹</button>
-          <button class="btn ghost small" data-app="newdir">新建</button>
-          <button class="btn ghost small" data-app="refresh">刷新</button>
-          <input id="searchBox" class="searchbox" type="search" placeholder="筛选当前目录；回车全工作区搜索" />
+        <div class="toolbar" role="toolbar" aria-label="文件操作">
+          <div class="tb-group">
+            <button class="tb-btn" data-app="newfile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 12v5M9.5 14.5h5"/></svg>新建文件</button>
+            <button class="tb-btn" data-app="newdir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5h5"/></svg>新建文件夹</button>
+          </div>
+          <div class="tb-group">
+            <button class="tb-btn" data-app="upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>上传文件</button>
+            <button class="tb-btn" data-app="uploaddir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 16v-5"/><path d="M10 13l2-2 2 2"/></svg>上传文件夹</button>
+          </div>
+          <span class="tb-spacer"></span>
+          <input id="searchBox" class="searchbox" type="search" placeholder="筛选；回车全盘搜索" aria-label="搜索文件" />
+          <div class="tb-group">
+            <button class="tb-btn icon-only" data-app="refresh" title="刷新" aria-label="刷新"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 9"/><path d="M23 4v5h-5"/></svg></button>
+          </div>
+        </div>
+        <div class="pathbar locbar">
+          <svg class="locicon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
           <span class="crumbs" id="breadcrumb"></span>
         </div>
         <table class="files">
@@ -246,17 +307,16 @@
         <div class="controls"><button class="close" onclick="WindowManager.closeWindow('shared')" aria-label="关闭窗口">✕</button></div>
       </div>
       <div class="window-body">
-        <div class="section-label">共享模型配置（同步给选择接收的用户）</div>
-        <p class="hint">
-          提供方将合并进用户的 DSH 模型设置；同名路由会被共享配置覆盖，用户自建的其他提供方不受影响。
-          已接收用户会重新收到更新提示，由其自行确认后生效。
-        </p>
+        <div class="callout">
+          提供方将合并进用户的 DSH 模型设置；同名路由会被共享配置覆盖，用户自建的其他提供方不受影响。已接收用户会重新收到更新提示，由其自行确认后生效。
+        </div>
+        <div class="section-label">模型提供方</div>
         <div id="sharedProviders"></div>
         <div class="row-actions gap-top-s">
           <button class="btn ghost small" id="addProviderBtn">+ 添加提供方</button>
         </div>
 
-        <div class="section-label gap-top">共享凭据（引用 → API Key）</div>
+        <div class="section-label gap-top">共享凭据（引用名 → API Key）</div>
         <table class="admin" id="sharedCreds">
           <thead><tr><th>引用名</th><th>API Key</th><th></th></tr></thead>
           <tbody></tbody>
@@ -308,7 +368,7 @@
         <div class="controls"><button class="close" onclick="WindowManager.closeWindow('ops')" aria-label="关闭窗口">✕</button></div>
       </div>
       <div class="window-body">
-        <div class="section-label">运行中的 DSH 实例</div>
+        <div class="section-label">运行中的 DSH 实例<span class="ver-badge" id="opsDshVersion" title="dsh CLI 版本（dsh --version 输出，约 1 分钟刷新）"></span></div>
         <table class="admin" id="opsInstances">
           <thead><tr><th>用户</th><th>角色</th><th>状态</th><th>端口</th><th>运行时长</th><th>重启</th><th></th></tr></thead>
           <tbody></tbody>
@@ -335,13 +395,13 @@
       </div>
       <div class="window-body">
         <div class="section-label">导入插件包（.tar.gz）</div>
-        <p class="hint">
+        <div class="callout">
           内网离线模式：在有网机器上下载 GitHub 归档（仓库页 Code → Download，或
-          https://codeload.github.com/&lt;owner&gt;/&lt;repo&gt;/tar.gz/refs/heads/main），
+          <code>https://codeload.github.com/&lt;owner&gt;/&lt;repo&gt;/tar.gz/refs/heads/main</code>），
           再在此上传。支持 cordis 插件 / 技能（SKILL.md）/ agent 预设；install 脚本型不支持。
-        </p>
-        <div class="row-actions">
-          <input id="marketTgz" type="file" accept=".tgz,.tar.gz,application/gzip" />
+        </div>
+        <div class="import-row">
+          <input id="marketTgz" type="file" accept=".tgz,.tar.gz,application/gzip" aria-label="选择 .tar.gz 插件包" />
           <button class="btn primary small" id="marketImportBtn">导入</button>
         </div>
         <p class="msg hint" id="marketImportMsg"></p>
@@ -362,23 +422,27 @@
         <div class="controls"><button class="close" onclick="WindowManager.closeWindow('audit')" aria-label="关闭窗口">✕</button></div>
       </div>
       <div class="window-body">
-        <div class="row-actions">
-          <input id="auditActor" placeholder="操作者用户名…" style="width:160px" />
-          <select id="auditAction">
-            <option value="">全部动作</option>
-            <option>register</option><option>login</option><option>logout</option>
-            <option>approve</option><option>disable</option><option>enable</option>
-            <option>password_change</option><option>password_reset</option><option>user_delete</option>
-            <option>session_revoke</option><option>settings_update</option>
-            <option>shared_config_set</option><option>shared_config_accept</option>
-            <option>instance_stop</option><option>market_import</option><option>market_delete</option>
-            <option>plugin_install</option><option>plugin_uninstall</option>
-          </select>
+        <div class="toolbar" role="toolbar" aria-label="审计日志筛选">
+          <div class="tb-group tb-fields">
+            <input id="auditActor" placeholder="操作者用户名…" aria-label="操作者用户名" />
+            <select id="auditAction">
+              <option value="">全部动作</option>
+              <option>register</option><option>login</option><option>logout</option>
+              <option>approve</option><option>disable</option><option>enable</option>
+              <option>password_change</option><option>password_reset</option><option>user_delete</option>
+              <option>session_revoke</option><option>settings_update</option>
+              <option>shared_config_set</option><option>shared_config_accept</option>
+              <option>instance_stop</option><option>market_import</option><option>market_delete</option>
+              <option>plugin_install</option><option>plugin_uninstall</option>
+            </select>
+          </div>
           <button class="btn primary small" id="auditFilterBtn">筛选</button>
-          <span style="flex:1"></span>
-          <button class="btn ghost small" id="auditPrev">← 上一页</button>
+          <span class="tb-spacer"></span>
           <span class="hint" id="auditPageInfo"></span>
-          <button class="btn ghost small" id="auditNext">下一页 →</button>
+          <div class="tb-group">
+            <button class="tb-btn" id="auditPrev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>上一页</button>
+            <button class="tb-btn" id="auditNext">下一页<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+          </div>
         </div>
         <table class="admin" id="auditRows">
           <thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>详情</th></tr></thead>
@@ -396,14 +460,23 @@
       </div>
       <div class="window-body">
         <div class="section-label">注册</div>
-        <div class="field">
-          <label><input type="checkbox" id="setAllowRegister" /> 开放自助注册（关闭后仅管理员可管理用户）</label>
+        <div class="set-list">
+          <div class="set-row">
+            <div class="set-info">
+              <div class="set-title">开放自助注册</div>
+              <div class="set-desc">关闭后，新用户无法自行注册，仅管理员可在用户管理中管理账号</div>
+            </div>
+            <label class="switch"><input type="checkbox" id="setAllowRegister" /><span class="slider" aria-hidden="true"></span></label>
+          </div>
+          <div class="set-row">
+            <div class="set-info">
+              <div class="set-title">注册邀请码</div>
+              <div class="set-desc">开启注册后，注册时需填写此邀请码；留空则不要求</div>
+            </div>
+            <input id="setInviteCode" class="set-input" placeholder="例如 team-2026" />
+          </div>
         </div>
-        <div class="field">
-          <label for="setInviteCode">注册邀请码（留空 = 不要求邀请码）</label>
-          <input id="setInviteCode" placeholder="例如 team-2026" />
-        </div>
-        <div class="row-actions">
+        <div class="row-actions gap-top">
           <button class="btn primary small" id="saveSettingsBtn">保存设置</button>
         </div>
         <p class="msg hint" id="settingsMsg"></p>
@@ -479,6 +552,15 @@
         const dot = st === 'running' ? 'on' : st === 'starting' ? 'starting' : 'off'
         stateEl.innerHTML = `<span class="dot ${dot}"></span> `
         stateEl.appendChild(document.createTextNode(label + restartNote + err))
+        // 当前 dsh CLI 版本（未运行也显示 —— 它是将要启动的二进制；探测
+        // 失败为空，不占位）。
+        if (body.dshVersion) {
+          const ver = document.createElement('span')
+          ver.className = 'ver-badge'
+          ver.title = 'dsh CLI 版本（dsh --version 输出，约 1 分钟刷新）'
+          ver.textContent = body.dshVersion
+          stateEl.appendChild(ver)
+        }
         // 只要存在被跟踪的实例（即使已崩溃）就显示「停止」按钮，
         // 以便残留条目总能从界面上清除。
         document.getElementById('stopBtn').classList.toggle('hidden', inst === null)
@@ -490,7 +572,9 @@
         if (st === 'running' && body.url) document.getElementById('openDshBtn').onclick = () => window.open(body.url, '_blank', 'noopener,noreferrer')
         const launchBtn = document.getElementById('launchBtn')
         launchBtn.disabled = st === 'starting'
-        launchBtn.textContent = st === 'starting' ? '启动中…' : '启动 DSH'
+        document.getElementById('launchBtnText').textContent = st === 'starting' ? '启动中…' : '启动 DSH'
+        // 运行 / 崩溃态主操作让位给「打开 DSH」「重启」，避免互斥入口并排。
+        launchBtn.classList.toggle('hidden', st === 'running' || st === 'crashed')
         return st
       }
       async function refreshDsh() {
@@ -518,12 +602,13 @@
       }
       document.getElementById('launchBtn').addEventListener('click', async (event) => {
         const btn = event.currentTarget
+        const btnText = document.getElementById('launchBtnText')
         btn.disabled = true
-        btn.textContent = '启动中…'
+        btnText.textContent = '启动中…'
         const r = await api('/api/dsh/launch', { method: 'POST', body: JSON.stringify({ folder: pathString() }) })
         if (!r.ok) {
           btn.disabled = false
-          btn.textContent = '启动 DSH'
+          btnText.textContent = '启动 DSH'
           alert(r.error === 'already_running' ? '已有运行中的 DSH，请先停止' : '启动失败：' + r.error)
           return
         }
@@ -690,10 +775,11 @@
 
       // ---------- 管理员扩展（运维 / 审计 / 设置 / 市场管理） ----------
       const { loadOps, loadAudit, loadSettings, loadMarketAdmin } = initAdminExtras({ api, esc })
-      document.querySelectorAll('#opsIcon').forEach((el) => el.addEventListener('click', () => loadOps()))
-      document.querySelectorAll('#auditIcon').forEach((el) => el.addEventListener('click', () => loadAudit()))
-      document.querySelectorAll('#settingsIcon').forEach((el) => el.addEventListener('click', () => loadSettings()))
-      document.querySelectorAll('#marketIcon').forEach((el) => el.addEventListener('click', () => loadMarketAdmin()))
+      // 桌面图标与任务栏按钮共用同一加载入口（点击即刷新数据）。
+      document.querySelectorAll('#opsIcon, #opsTask').forEach((el) => el.addEventListener('click', () => loadOps()))
+      document.querySelectorAll('#auditIcon, #auditTask').forEach((el) => el.addEventListener('click', () => loadAudit()))
+      document.querySelectorAll('#settingsIcon, #settingsTask').forEach((el) => el.addEventListener('click', () => loadSettings()))
+      document.querySelectorAll('#marketIcon, #marketTask').forEach((el) => el.addEventListener('click', () => loadMarketAdmin()))
 
       // ---------- 时钟 ----------
       function tick() { document.getElementById('clock').textContent = new Date().toLocaleString('zh-CN', { hour12: false }) }
@@ -710,14 +796,12 @@
         document.getElementById('roleBadge').textContent = roleLabel
         document.getElementById('roleBadge').classList.remove('hidden')
         if (user.role === 'admin') {
-          document.getElementById('adminIcon').classList.remove('hidden')
-          document.getElementById('adminTask').classList.remove('hidden')
-          document.getElementById('sharedIcon').classList.remove('hidden')
-          document.getElementById('sharedTask').classList.remove('hidden')
-          document.getElementById('opsIcon').classList.remove('hidden')
-          document.getElementById('marketIcon').classList.remove('hidden')
-          document.getElementById('auditIcon').classList.remove('hidden')
-          document.getElementById('settingsIcon').classList.remove('hidden')
+          // 管理组整个分区（含桌面图标组、任务栏按钮与分隔线）随角色显隐。
+          document.getElementById('adminGroup').classList.remove('hidden')
+          for (const id of ['adminTask', 'sharedTask', 'opsTask', 'auditTask', 'marketTask', 'settingsTask']) {
+            document.getElementById(id).classList.remove('hidden')
+          }
+          document.getElementById('adminTaskSep').classList.remove('hidden')
           await Promise.all([loadUsers(), loadShared()])
         }
         await explorer.syncAll()

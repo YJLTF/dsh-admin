@@ -61,6 +61,7 @@
     var TILE_FILE = '<div class="tile file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>'
     function renderDesktop(entries) {
       fileIcons.innerHTML = ''
+      $('folderCount').textContent = entries.length + ' 项'
       if (!entries.length) {
         fileIcons.innerHTML = '<p class="desk-empty">此文件夹为空</p>'
         return
@@ -73,6 +74,8 @@
         icon.dataset.name = e.name
         icon.setAttribute('role', 'button')
         icon.setAttribute('tabindex', '0')
+        // 名称过长被省略时，悬停仍可看全名。
+        icon.title = e.name
         icon.draggable = true
         icon.innerHTML = (e.type === 'dir' ? TILE_DIR : TILE_FILE) + '<span class="label">' + esc(e.name) + '</span>'
         fileIcons.appendChild(icon)
@@ -734,6 +737,96 @@
     }
     previewDownload.addEventListener('click', function () {
       if (previewPath) triggerDownload(previewPath)
+    })
+
+    // ---------- 桌面图标右键菜单 ----------
+    // 触屏设备不启用（部分安卓长按触发 contextmenu，与既有
+    // 单击/双击/拖拽交互冲突），保留浏览器默认行为。
+    var ctxMenu = $('ctxMenu')
+    var ctxTarget = null // { name, type, path }
+    function closeCtx() {
+      ctxMenu.classList.add('hidden')
+      ctxTarget = null
+    }
+    function openCtx(x, y, target) {
+      ctxTarget = target
+      // 菜单项文案按目标类型微调：目录是「打开/打包下载」，文件是「预览/下载」。
+      ctxMenu.querySelector('[data-act="open"] span').textContent = target.type === 'dir' ? '打开' : '预览'
+      ctxMenu.querySelector('[data-act="download"] span').textContent = target.type === 'dir' ? '打包下载 zip' : '下载'
+      ctxMenu.classList.remove('hidden')
+      // 先显示才能量尺寸；右/下边缘时回拉，菜单完整落在视口内。
+      var r = ctxMenu.getBoundingClientRect()
+      ctxMenu.style.left = Math.max(8, Math.min(x, window.innerWidth - r.width - 8)) + 'px'
+      ctxMenu.style.top = Math.max(8, Math.min(y, window.innerHeight - r.height - 8)) + 'px'
+    }
+    if (!window.matchMedia('(pointer: coarse)').matches) {
+      fileIcons.addEventListener('contextmenu', function (event) {
+        var icon = event.target.closest('.desk-icon[data-name]')
+        if (!icon) return
+        event.preventDefault()
+        openCtx(event.clientX, event.clientY, {
+          name: icon.dataset.name,
+          type: icon.dataset.type,
+          path: joinPath(icon.dataset.name),
+        })
+      })
+      // 五路关闭：菜单外按下 / Esc / 任意滚动 / 窗口缩放 / 点菜单项。
+      document.addEventListener('pointerdown', function (event) {
+        if (!ctxMenu.classList.contains('hidden') && !ctxMenu.contains(event.target)) closeCtx()
+      })
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !ctxMenu.classList.contains('hidden')) closeCtx()
+      })
+      document.addEventListener('scroll', function () {
+        if (!ctxMenu.classList.contains('hidden')) closeCtx()
+      }, true)
+      window.addEventListener('resize', closeCtx)
+      ctxMenu.addEventListener('click', async function (event) {
+        var item = event.target.closest('.ctx-item[data-act]')
+        if (!item || !ctxTarget) return
+        var act = item.dataset.act
+        var t = ctxTarget
+        closeCtx()
+        if (act === 'open') {
+          if (t.type === 'dir') navigate(t.path)
+          else openPreview(t.path)
+        } else if (act === 'rename') openRename(t.path)
+        else if (act === 'move') openMove(t.path)
+        else if (act === 'download') {
+          if (t.type === 'dir') triggerZipDownload(t.path)
+          else triggerDownload(t.path)
+        } else if (act === 'delete') delEntry(t.path, t.type)
+        else if (act === 'props') openProps(t)
+      })
+    }
+
+    // ---------- 属性对话框 ----------
+    // 信息来自当前目录条目（lastEntries 已含 size/mtimeMs），零后端改动。
+    var propsDialog = $('propsDialog')
+    var propsBody = $('propsBody')
+    function openProps(t) {
+      var e = null
+      for (var i = 0; i < lastEntries.length; i++) {
+        if (lastEntries[i].name === t.name) { e = lastEntries[i]; break }
+      }
+      var rows = [
+        ['名称', t.name],
+        ['类型', t.type === 'dir' ? '文件夹' : '文件'],
+        ['大小', e ? fmtSize(e.size) : '—'],
+        ['修改时间', e && e.mtimeMs ? new Date(e.mtimeMs).toLocaleString() : '—'],
+        ['所在位置', deskPathLabel()],
+      ]
+      propsBody.innerHTML = ''
+      for (var j = 0; j < rows.length; j++) {
+        propsBody.insertAdjacentHTML('beforeend', '<dt>' + esc(rows[j][0]) + '</dt><dd>' + esc(String(rows[j][1])) + '</dd>')
+      }
+      propsDialog.classList.remove('hidden')
+    }
+    function closeProps() { propsDialog.classList.add('hidden') }
+    propsDialog.addEventListener('click', function (event) { if (event.target === propsDialog) closeProps() })
+    $('propsClose').addEventListener('click', closeProps)
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !propsDialog.classList.contains('hidden')) closeProps()
     })
 
     return { pathString: pathString, syncAll: syncAll, navigate: navigate }

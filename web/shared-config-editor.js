@@ -30,7 +30,9 @@ function initSharedConfigEditor(onSaved) {
 
   function removeBtn(target) {
     const btn = document.createElement('button')
-    btn.className = 'btn small danger'
+    btn.className = 'btn mini-del'
+    btn.type = 'button'
+    btn.setAttribute('aria-label', '删除此行')
     btn.textContent = '×'
     btn.onclick = () => target.remove()
     return btn
@@ -111,14 +113,20 @@ function initSharedConfigEditor(onSaved) {
     const card = document.createElement('div')
     card.className = 'prov-card'
 
+    // 头部：固定标签 + 路由名徽章（随输入实时更新）+ 删除按钮。
     const head = document.createElement('div')
     head.className = 'prov-head'
     const title = document.createElement('span')
     title.className = 't'
     title.textContent = '提供方'
-    head.append(title, removeBtn(card))
+    const chip = document.createElement('span')
+    chip.className = 'prov-chip'
+    chip.title = '路由名'
+    chip.textContent = p.route || '未命名'
+    head.append(title, chip, removeBtn(card))
 
     const routeIn = textInput(p.route || '', '例如 deepseek')
+    routeIn.addEventListener('input', () => { chip.textContent = routeIn.value.trim() || '未命名' })
     const nameIn = textInput(p.displayName || '', '例如 DeepSeek 官方')
     const apiIn = textInput(p.api || '', '例如 openai-completions')
     apiIn.setAttribute('list', 'dshApiProtocols')

@@ -85,6 +85,46 @@ function probePort(port: number): Promise<boolean> {
   })
 }
 
+/** dsh CLI 版本探测的缓存窗口与单次探测超时。 */
+const DSH_VERSION_TTL_MS = 60_000
+const DSH_VERSION_TIMEOUT_MS = 4_000
+
+/** 运行 `<dshCommand> --version` 并取首个非空行（stdout/stderr 合并）。
+ * 退出码不敏感（老 CLI 可能以 usage 退出但仍打印版本）；无输出、启动
+ * 失败（如 ENOENT）或超时都返回 null —— 版本未知不是服务器错误。 */
+function probeDshVersion(command: string[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    const [cmd = 'dsh', ...prefix] = command
+    let out = ''
+    let done = false
+    // 版本探测不经过 setuid 包装：读 --version 不触及任何用户资源。
+    const child = spawn(cmd, [...prefix, '--version'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: scrubEnv(process.env),
+    })
+    const timer = setTimeout(() => child.kill('SIGKILL'), DSH_VERSION_TIMEOUT_MS)
+    timer.unref()
+    const finish = (): void => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      const line = out
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .find((l) => l !== '')
+      resolve(line === undefined ? null : line.slice(0, 80))
+    }
+    child.stdout?.on('data', (chunk: Buffer) => {
+      out += chunk.toString()
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      out += chunk.toString()
+    })
+    child.on('error', finish)
+    child.on('close', finish)
+  })
+}
+
 /** 当某用户已有一个运行中的主 DSH 时抛出。 */
 export class AlreadyRunningError extends Error {
   constructor(userId: string) {
@@ -121,6 +161,11 @@ export class Supervisor {
   /** 缓存的非内部 IPv4（可发布网卡）；null = 无。 */
   private lanIp: string | null = null
   private readonly portGuard: PortGuard | undefined
+  /** dsh CLI 版本探测结果缓存；null 值也缓存（二进制缺失时状态轮询
+   * 不应每次都空跑一次探测）。 */
+  private dshVersionCache: { value: string | null; at: number } | null = null
+  /** 进行中的版本探测（并发去重：同时到达的多个请求共享一次探测）。 */
+  private dshVersionProbe: Promise<string | null> | null = null
 
   constructor(private readonly config: ServerConfig) {
     this.portGuard = createPortGuard(config.portGuard)
@@ -178,6 +223,26 @@ export class Supervisor {
   /** 用户运行中主 DSH 的环回端口（若有）。 */
   portFor(userId: string): number | undefined {
     return this.mains.get(userId)?.port
+  }
+
+  /** 当前 dsh CLI 的版本行（`dsh --version` 首行）；探测失败为 null。
+   * dsh 二进制支持免重建热更新（bind mount 替换），因此结果按 TTL
+   * 过期重探，而不是只在进程启动时探测一次。 */
+  async dshVersion(): Promise<string | null> {
+    if (this.dshVersionCache !== null && Date.now() - this.dshVersionCache.at < DSH_VERSION_TTL_MS) {
+      return this.dshVersionCache.value
+    }
+    if (this.dshVersionProbe === null) {
+      this.dshVersionProbe = probeDshVersion(this.config.dshCommand)
+        .then((value) => {
+          this.dshVersionCache = { value, at: Date.now() }
+          return value
+        })
+        .finally(() => {
+          this.dshVersionProbe = null
+        })
+    }
+    return this.dshVersionProbe
   }
 
   /** 停止用户的两个进程（取消任何待处理的重启）。 */

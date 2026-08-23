@@ -37,6 +37,7 @@
       var tbody = document.querySelector('#opsInstances tbody')
       var r = await api('/api/admin/instances')
       if (!r.ok) { tbody.innerHTML = '<tr class="empty"><td colspan="7">加载失败</td></tr>'; return }
+      document.getElementById('opsDshVersion').textContent = r.body.dshVersion || '版本未知'
       tbody.innerHTML = ''
       if (!r.body.instances.length) {
         tbody.innerHTML = '<tr class="empty"><td colspan="7">当前没有运行中的实例</td></tr>'

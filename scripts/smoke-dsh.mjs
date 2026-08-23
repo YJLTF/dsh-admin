@@ -48,6 +48,7 @@ try {
 
   r = await json('/api/dsh/status', { cookie })
   assert(r.body.running === false, '初始状态未运行')
+  assert(r.body.dshVersion === 'fake-dsh 9.9.9-smoke', 'status 附带 dsh CLI 版本行')
 
   r = await json('/api/dsh/launch', { method: 'POST', cookie, body: { folder: 'proj' } })
   console.log('启动    ->', r.status, r.body)

@@ -125,6 +125,7 @@ export const dshRoutes: FastifyPluginAsync = async (app) => {
     const { main, watchdog } = app.supervisor.status(request.user!.id)
     return {
       running: alive(main?.status),
+      dshVersion: await app.supervisor.dshVersion(),
       instance: main
         ? {
             id: main.id,

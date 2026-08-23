@@ -54,6 +54,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/admin/instances', { preHandler: requireAdmin }, async () => {
     const byId = new Map(listPublicUsers(app.db).map((user) => [user.id, user.username]))
     return {
+      dshVersion: await app.supervisor.dshVersion(),
       instances: app.supervisor.listInstances().map((instance) => ({
         ...instance,
         username: byId.get(instance.userId) ?? instance.userId,

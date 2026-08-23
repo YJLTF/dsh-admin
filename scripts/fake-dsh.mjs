@@ -9,6 +9,12 @@ const role = process.env.DSH_ADMIN_ROLE ?? 'main'
 const port = Number(process.env.DSH_ADMIN_PORT ?? '3080')
 const cwd = process.cwd()
 
+// 版本探测（编排器 dshVersion()）：打印标记行即退，不绑定端口。
+if (process.argv.includes('--version')) {
+  console.log('fake-dsh 9.9.9-smoke')
+  process.exit(0)
+}
+
 if (role === 'watchdog') {
   // 一次性看门狗：标记已运行，执行交接命令，然后退出。
   const handoffPath = process.env.DSH_ADMIN_HANDOFF_PATH

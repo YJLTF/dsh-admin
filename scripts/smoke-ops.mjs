@@ -79,6 +79,7 @@ try {
 
   r = await json('/api/admin/instances', { cookie: adminCookie })
   assert(r.status === 200 && r.body.instances.length === 0, '初始无实例')
+  assert(r.body.dshVersion === 'fake-dsh 9.9.9-smoke', '实例视图附带 dsh CLI 版本行')
 
   r = await json('/api/dsh/launch', { method: 'POST', cookie: daveCookie, body: { folder: 'proj' } })
   assert(r.status === 200, 'dave 启动 DSH')

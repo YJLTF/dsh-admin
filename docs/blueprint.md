@@ -36,6 +36,7 @@ spawn(dshCommand, ['--profile', 'headless', WATCHDOG_TASK], { /* 同上 */ })
 
 - env 擦除镜像 harness 的 `scrubbedParentEnv`/`SENSITIVE_ENV_PATTERN` 思路：从允许列表重建子进程环境，再注入解析好的每用户取值（`HOME` 指向工作区、`DSH_HOME` 指向状态目录）。
 - 进程树 teardown 自行实现：SIGTERM → 5s 宽限 → SIGKILL（Windows 下信号均映射为进程终止）。
+- **dsh CLI 版本探测**：`Supervisor.dshVersion()` 运行 `<dshCommand> --version` 取首个非空行（stdout/stderr 合并，退出码不敏感；4s 超时；失败为 null，不影响状态接口）。dsh 二进制支持免重建热更新（bind mount 替换），因此结果按 60s TTL 缓存 + 并发去重，而非进程启动时探测一次；`/api/dsh/status` 与 `/api/admin/instances` 均携带 `dshVersion` 字段供前端展示。
 
 ## 4. 双 DSH「共享对话 + 崩溃接管」
 
@@ -71,9 +72,9 @@ spawn(dshCommand, ['--profile', 'headless', WATCHDOG_TASK], { /* 同上 */ })
 |---|---|---|
 | Auth | `POST /api/auth/register\|login\|logout`、`GET /api/auth/me`、`GET /api/meta`（注册门禁状态）、`POST /api/me/password`、`GET /api/me/sessions`、`DELETE /api/me/sessions/:id` | 已实现（P1/P8） |
 | Admin | `GET /api/admin/users`、`POST /api/admin/users/:id/approve\|disable\|enable\|reset-password\|delete`、`GET/PUT /api/admin/settings`、`GET /api/admin/audit` | 已实现（P1/P8） |
-| Ops | `GET /healthz`、`GET /api/admin/instances`、`POST /api/admin/instances/:userId/stop`、`GET /api/admin/storage` | 已实现（P8） |
+| Ops | `GET /healthz`、`GET /api/admin/instances`（含 dsh CLI 版本行）、`POST /api/admin/instances/:userId/stop`、`GET /api/admin/storage` | 已实现（P8） |
 | Desktop/FS | `GET /api/desktop/tree`、`POST /api/fs/mkdir\|create\|upload(multipart)\|delete\|rename\|move\|write`、`GET /api/fs/read`（文本预览）、`GET /api/fs/raw`（下载/内联流，支持 Range）、`GET /api/fs/zip`（目录打包）、`GET /api/fs/search`（全工作区搜索） | 已实现（P2/P8；上传为 multipart 流式，文件夹上传保留相对路径） |
-| DSH | `POST /api/dsh/launch\|stop\|restart`、`GET /api/dsh/status`（含连续重启计数/熔断态） | 已实现（P3/P5/P8，内网直连 + forwarder；main+watchdog 编排层） |
+| DSH | `POST /api/dsh/launch\|stop\|restart`、`GET /api/dsh/status`（含连续重启计数/熔断态 + dsh CLI 版本行） | 已实现（P3/P5/P8，内网直连 + forwarder；main+watchdog 编排层） |
 | Plugin | `GET /api/plugins`、`POST /api/plugins/select` | 已实现（P4） |
 | Market | `GET/POST/DELETE /api/admin/market*`、`GET /api/me/market`、`POST /api/me/market/:id/install`、`POST /api/me/market/uninstall` | 已实现（P8，见 [plugins-market.md](plugins-market.md)） |
 | SharedConfig | `GET/PUT /api/admin/shared-config`、`GET /api/me/shared-config`、`POST /api/me/shared-config/accept` | 已实现（[shared-config.md](shared-config.md)） |
