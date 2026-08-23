@@ -2,8 +2,9 @@
 #   1. 将 PUBLIC_HOST 设置为服务器的局域网 IP（静态 IP 或 DHCP 保留地址）。
 #   2. DSH 端口范围必须与发布（published）的端口范围一致；请根据最大
 #      并发用户数规划大小（每个运行中的 DSH 占用一个端口）。
-#   3. 数据（SQLite + 加密密钥 + 各用户主目录）保存在命名卷（named
-#      volume）中——丢失该卷将丢失所有账号和已存储的 API 密钥。
+#   3. 数据（SQLite 数据库 + 各用户主目录/工作区）保存在 bind mount
+#      `./dsh-data` 中——丢失该目录将丢失所有账号、用户文件与已合并进
+#      各用户凭据文件的共享 API 密钥。
 #   4. 更新内网 dsh CLI（无需重建/重传镜像）：
 #      a. 有网机器：powershell scripts\pack-dsh.ps1 -Version <版本>  生成 dsh-cli.tgz
 #      b. 传到服务器本目录，执行：
@@ -24,7 +25,7 @@ services:
       - "3080:3080" # 编排器 Web UI + API
       - "40000-40100:40000-40100" # 每用户子 DSH 端口
     environment:
-      DSH_ADMIN_PUBLIC_HOST: 192.168.0.131 # <- 你的局域网 IP
+      DSH_ADMIN_PUBLIC_HOST: 192.168.31.50 # <- 你的局域网 IP
       DSH_ADMIN_DSH_PORT_MIN: "40000"
       DSH_ADMIN_DSH_PORT_MAX: "40100"
       # DSH_ADMIN_DSH_BIN: "" # 无需设置；默认从 PATH（/opt/dsh）解析 dsh

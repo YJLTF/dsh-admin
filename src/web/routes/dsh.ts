@@ -97,6 +97,11 @@ export const dshRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/dsh/restart', { preHandler: requireAuth, schema: restartSchema }, async (request, reply) => {
     const { command } = request.body as { command: string }
     const user = request.user!
+    // 先确认确有可重启的实例，再写交接文件 —— 否则一次落空的
+    // restart 会留下陈旧 handoff，被之后的崩溃看门狗误执行。
+    if (app.supervisor.status(user.id).main === undefined) {
+      return reply.code(404).send({ error: 'not_running' })
+    }
     // 注意：必须与 Supervisor 私有的 handoffPath() 一致 —— `users/<id>/handoff.json`
     // （刻意不放在 `home/` 内，修复时那里可能被清空）。
     const handoffPath = join(app.config.dataRoot, 'users', user.id, 'handoff.json')

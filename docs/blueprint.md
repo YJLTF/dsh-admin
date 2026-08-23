@@ -19,21 +19,23 @@
 - **主入口**：独立 `dsh-admin` bin（`node lib/cli.js`）直接跑 Fastify + SQLite + 进程编排。
 - **市场识别**：根 `package.json` 的 `dsh` 字段（`plugin`/`kind`/`bundle.patch`）+ `cordis.patch.yml`；不 import 任何 `@deepseek-ai/*` 宿主包，peerDependencies 为空，规避宿主包遮蔽。
 - **cordis 入口 `apply()` 是带守卫空操作**：默认无副作用，装进任意 profile 都不起服务器。
-- **产物型分发**：提交 `lib/`（构建产物），`prepare` = `npm run build` 供 git 安装自构建。
+- **源码型分发**：仓库不含 `lib/` 构建产物（.gitignore 排除）；`prepare` = `npm run build`，git 安装时自构建（市场侧按源码型弹构建确认，见 [STANDARD.md](../STANDARD.md) §2.2）。
 
 ## 3. spawn 每用户 DSH
 
 ```ts
-spawn(dshBinPath, ['--profile', 'web', '--patch', mainPatchPath, '--cwd', workspacePath], {
+// 主实例（端口取自 DSH_PORT_MIN/MAX 段；--patch 仅在 enablePatch 时传入）：
+spawn(dshCommand, ['--profile', 'web', '--host', '127.0.0.1', '--port', String(port), ...patchArgs], {
   cwd: workspacePath,
-  env: { ...scrubEnv(process.env), DSH_HOME: homeDir },
+  env: { ...scrubEnv(process.env), HOME: workspacePath, DSH_HOME: homeDir },
   stdio: ['ignore', 'pipe', 'pipe'],
-  detached: false,
 })
+// 看门狗：一次性 headless 实例，任务以位置参数传入。
+spawn(dshCommand, ['--profile', 'headless', WATCHDOG_TASK], { /* 同上 */ })
 ```
 
-- env 擦除镜像 harness 的 `scrubbedParentEnv`/`SENSITIVE_ENV_PATTERN` 思路：只向子进程显式注入已解析 key。
-- 进程树 teardown 自行实现：SIGTERM → grace → SIGKILL（Windows `taskkill /T /F`）。
+- env 擦除镜像 harness 的 `scrubbedParentEnv`/`SENSITIVE_ENV_PATTERN` 思路：从允许列表重建子进程环境，再注入解析好的每用户取值（`HOME` 指向工作区、`DSH_HOME` 指向状态目录）。
+- 进程树 teardown 自行实现：SIGTERM → 5s 宽限 → SIGKILL（Windows 下信号均映射为进程终止）。
 
 ## 4. 双 DSH「共享对话 + 崩溃接管」
 
@@ -44,12 +46,16 @@ spawn(dshBinPath, ['--profile', 'web', '--patch', mainPatchPath, '--cwd', worksp
 
 **崩溃接管闭环**（主 DSH 崩溃时，编排服务拉起一次守护 DSH 并自动重启主 DSH）：
 
+> 当前进度：编排层闭环（拉起守护 + 自动重启主实例 + 交接命令执行）已完成；下面 1–2 步的
+> 会话日志修复依赖 harness 内部机制（`interruptedTurnClosers` / `session-persistence`），
+> 随与真实 harness 集成接入。
+
 1. **诊断**：读退出码 + stderr 尾部 + 会话日志尾部，判定崩溃点。
 2. **修复会话日志**：`interruptedTurnClosers`（`packages/core/session/src/repair.ts`）+ `session-persistence.load`/`commitRepair` 把中断 turn 合成 `tool/result`/`step/end`/`turn/end{interrupted}`，产出可恢复的合法转录。
 3. **修复根因**：守护 DSH 以 agent 身份（对共享 workspace 有工具权限）修文件/配置、摘坏插件、杀卡死子进程。
 4. **接手会话**：`ctx.sessionPersistence.prepare`/`load`（或 `ctx.sessions.create({seed})`）恢复修复后的日志，接续对话成为新主 DSH；随后可选重拉 fresh 主 DSH 并退回守护位。
 
-**计划内重启（装插件）**：主 DSH 退出前把「post-restart 自动命令」写成 JSON 落到 `$DSH_HOME`，守护 DSH 执行重启后命令。
+**计划内重启（装插件）**：主 DSH 退出前把「post-restart 自动命令」写成 JSON 落到 `users/<id>/handoff.json`（刻意放在 `$DSH_HOME` 之外——修复流程可能清空 home），守护 DSH 在重启后读取并执行。
 
 **关键澄清**：「接手」= 顺序 failover（恢复同一持久日志续接对话），非两个活体同时驱动同一 turn——这是 harness 的 resume 语义，无需自建双向活体通道。
 

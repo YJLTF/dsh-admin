@@ -44,6 +44,7 @@ const json = makeJson(base)
 
 try {
   let r = await json('/api/auth/login', { method: 'POST', body: { username: 'gina', password: 'ginapass123' } })
+  assert(r.status === 200 && r.setCookie, '登录成功')
   const cookie = r.setCookie.split(';')[0]
 
   r = await json('/api/dsh/launch', { method: 'POST', cookie, body: { folder: 'proj' } })

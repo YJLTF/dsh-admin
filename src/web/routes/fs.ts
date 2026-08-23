@@ -9,6 +9,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdir, open, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { randomBytes } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
 import { basename, dirname, join, sep } from 'node:path'
 import { requireAuth } from '../middleware/authn.js'
@@ -206,7 +207,9 @@ export const fsRoutes: FastifyPluginAsync = async (app) => {
         if (rel === null) return reply.code(400).send({ error: 'bad_name' })
         const target = resolveWithinRoot(destAbs, rel)
         await mkdir(dirname(target), { recursive: true })
-        tmp = `${target}..uploading`
+        // 临时名带随机后缀：同一目标的并发上传不会共享半截写入
+        // （或因同时 rename 同一个临时文件而互相破坏）。
+        tmp = `${target}..uploading-${randomBytes(6).toString('hex')}`
         await pipeline(part.file, createWriteStream(tmp))
         if (part.file.truncated) {
           await rm(tmp, { force: true })
@@ -315,14 +318,12 @@ export const fsRoutes: FastifyPluginAsync = async (app) => {
     const fh = await open(p.abs, 'r').catch(() => null)
     if (fh === null) return reply.code(404).send({ error: 'not_found' })
     try {
-      const head = Buffer.alloc(Math.min(8192, entry.size))
-      await fh.read(head, 0, head.length, 0)
-      if (!isTextByExtension(entry.name) && sniffIsBinary(head)) {
-        return reply.code(415).send({ error: 'binary' })
-      }
       const cap = Math.min(entry.size, config.previewBytes)
       const buf = Buffer.alloc(cap)
       await fh.read(buf, 0, cap, 0)
+      if (!isTextByExtension(entry.name) && sniffIsBinary(cap <= 8192 ? buf : buf.subarray(0, 8192))) {
+        return reply.code(415).send({ error: 'binary' })
+      }
       return {
         name: entry.name,
         size: entry.size,

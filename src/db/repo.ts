@@ -172,14 +172,16 @@ export function getOrCreateWorkspace(db: Database, userId: string, relPath: stri
   const id = randomUUID()
   const segments = relPath.split('/').filter(Boolean)
   const name = segments.at(-1) ?? 'root'
-  prepare(db,'INSERT INTO workspaces (id, user_id, name, rel_path, created_at) VALUES (?, ?, ?, ?, ?)').run(
-    id,
-    userId,
-    name,
-    relPath,
-    Date.now(),
-  )
-  return { id, userId, name, relPath, createdAt: Date.now() }
+  const createdAt = Date.now()
+  const info = prepare(db,
+    'INSERT INTO workspaces (id, user_id, name, rel_path, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT (user_id, rel_path) DO NOTHING',
+  ).run(id, userId, name, relPath, createdAt)
+  if (info.changes === 0) {
+    // 并发创建：另一路已插入同一 (user_id, rel_path)，复用那一行。
+    const concurrent = findWorkspaceByPath(db, userId, relPath)
+    if (concurrent !== undefined) return concurrent
+  }
+  return { id, userId, name, relPath, createdAt }
 }
 
 /** 替换工作区的插件选择（单事务内先删后插）。 */

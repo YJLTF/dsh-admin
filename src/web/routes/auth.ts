@@ -70,7 +70,15 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       const homeDir = userHomeDir(app.config, id)
       await ensureUserDir(homeDir)
       const passHash = await hashPassword(password)
-      createUser(db, { id, username, passHash, role: 'pending', homeDir })
+      try {
+        createUser(db, { id, username, passHash, role: 'pending', homeDir })
+      } catch (err) {
+        // 并发注册同名用户：预检查通过但 INSERT 撞 UNIQUE 约束 → 409。
+        if ((err as NodeJS.ErrnoException).code?.startsWith('SQLITE_CONSTRAINT')) {
+          return reply.code(409).send({ error: 'username_taken' })
+        }
+        throw err
+      }
       audit(db, id, 'register', JSON.stringify({ username }))
       return reply.code(201).send({ user: { id, username, role: 'pending' } })
     },

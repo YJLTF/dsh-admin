@@ -51,6 +51,8 @@ export interface Instance {
  * 不臆造崩溃 —— 进程活着但未监听是可见的、可停止的状态）。 */
 const READY_PROBE_INTERVAL_MS = 150
 const READY_PROBE_TIMEOUT_MS = 60_000
+/** 单次连接探测的挂起上限（超出按未就绪处理，防止轮询循环卡死）。 */
+const READY_PROBE_CONNECT_TIMEOUT_MS = 2_000
 
 /** 子进程的环回监听是否已接受 TCP 连接（握手成功即就绪）。 */
 function probePort(port: number): Promise<boolean> {
@@ -62,6 +64,9 @@ function probePort(port: number): Promise<boolean> {
     }
     socket.once('connect', () => done(true))
     socket.once('error', () => done(false))
+    // 过滤型防火墙规则可能让 SYN 无响应地挂起；超时按未就绪处理，
+    // 交回轮询循环（整体仍受 READY_PROBE_TIMEOUT_MS 约束）。
+    socket.setTimeout(READY_PROBE_CONNECT_TIMEOUT_MS, () => done(false))
   })
 }
 
@@ -184,31 +189,42 @@ export class Supervisor {
   }
 
   private async spawnInstance(userId: string, role: InstanceRole, folder: string, patchPath?: string): Promise<Instance> {
-    const port = role === 'main' ? await findFreePort(this.config.dshPortMin, this.config.dshPortMax) : undefined
     // 令牌与端口同生命周期：崩溃重启（新端口）自然换新令牌；
     // 手动重启也换新 —— 旧链接立即作废，无残留窗口。
-    const token = role === 'main' && this.config.publicHost !== '' ? randomBytes(32).toString('base64url') : undefined
     const instance: Instance = {
       id: randomUUID(),
       userId,
       role,
       folder,
-      port,
       status: 'starting',
       patchPath,
-      token,
+      token: role === 'main' && this.config.publicHost !== '' ? randomBytes(32).toString('base64url') : undefined,
     }
+    // 先同步占住槽位再 await：否则两次并发 launch 会在 findFreePort
+    // 的 await 处交错通过“已有运行中实例”检查，各自 spawn 一个子进程
+    // （其中一个从此脱离管理）。
     const map = role === 'main' ? this.mains : this.watchdogs
     map.set(userId, instance)
+    if (role === 'main') {
+      try {
+        instance.port = await findFreePort(this.config.dshPortMin, this.config.dshPortMax)
+      } catch (err) {
+        // 端口范围耗尽等后台失败要反映到实例上（crashed 可被再次
+        // launch 清理），而不是留下一个永远 starting 的占位条目。
+        instance.status = 'crashed'
+        instance.lastError = err instanceof Error ? err.message : String(err)
+        throw err
+      }
+    }
 
     const [command = 'dsh', ...args] = this.config.dshCommand
     const launchArgs = ['--profile', role === 'main' ? MAIN_PROFILE : 'headless']
     if (role === 'main') {
       // dsh CLI 刻意拒绝 --host 0.0.0.0（RCE 暴露防护），因此子进程
       // 始终绑定环回。在内网模式（publicHost）下直接发布子端口；
-      // 每个主实例一个 socat 转发器，把容器的 eth0 桥接到该环回监听
-      // （见 spawnForwarder）。
-      launchArgs.push('--host', '127.0.0.1', '--port', String(port))
+      // 每个主实例一个进程内 HTTP/WS 转发器，把容器的 eth0 桥接到该
+      // 环回监听（见 forwarder.ts）。
+      launchArgs.push('--host', '127.0.0.1', '--port', String(instance.port))
       // --patch 需要支持它的 dsh CLI；默认关闭，这样子进程在较老的
       // dsh 版本上也能启动。
       if (this.config.enablePatch && patchPath !== undefined) launchArgs.push('--patch', patchPath)
@@ -222,12 +238,14 @@ export class Supervisor {
       DSH_ADMIN_HANDOFF_PATH: this.handoffPath(userId), // 两种角色：main 写入，watchdog 读取
     }
     if (role === 'main') {
-      env.DSH_ADMIN_PORT = String(port)
+      env.DSH_ADMIN_PORT = String(instance.port)
     }
 
     const child = this.spawnAsUser(userId, command, [...args, ...launchArgs], { cwd: folder, env })
     this.trackChild(userId, instance, child)
-    if (role === 'main' && port !== undefined && token !== undefined) this.syncForwarder(userId, port, token)
+    if (role === 'main' && instance.port !== undefined && instance.token !== undefined) {
+      this.syncForwarder(userId, instance.port, instance.token)
+    }
     return instance
   }
 
@@ -314,6 +332,9 @@ export class Supervisor {
       instance.status = 'crashed'
       instance.lastError = err.message
       this.children.delete(instance.id)
+      // spawn 失败（如 ENOENT）不会触发 exit；看门狗的一次性槽位
+      // 不在这里清掉的话，后续 spawnWatchdog 会一直拿到死条目。
+      if (instance.role === 'watchdog') this.watchdogs.delete(userId)
     })
     child.on('exit', (code) => {
       instance.exitCode = code ?? undefined
@@ -352,21 +373,16 @@ export class Supervisor {
     })
   }
 
-  /** 把后台拉起失败（例如端口范围耗尽）反映到实例上，
-   * 而不是以未处理的 rejection 让编排器崩溃。 */
-  private markSpawnFailed(userId: string, role: InstanceRole, err: unknown): void {
-    const map = role === 'main' ? this.mains : this.watchdogs
-    const instance = map.get(userId)
-    if (instance === undefined) return
-    instance.status = 'crashed'
-    instance.lastError = err instanceof Error ? err.message : String(err)
-  }
-
   private scheduleRestart(userId: string, instance: Instance): void {
     const timer = setTimeout(() => {
       this.restartTimers.delete(userId)
-      this.spawnInstance(userId, instance.role, instance.folder, instance.patchPath)
-        .catch((err: unknown) => this.markSpawnFailed(userId, instance.role, err))
+      this.spawnInstance(userId, instance.role, instance.folder, instance.patchPath).catch(
+        (err: unknown) => {
+          // spawnInstance 已把失败写进实例（crashed + lastError）；
+          // 这里只需让重启失败在日志里可见。
+          process.stderr.write(`[restart ${userId}] ${String(err)}\n`)
+        },
+      )
     }, this.config.restartBackoffMs)
     timer.unref()
     this.restartTimers.set(userId, timer)

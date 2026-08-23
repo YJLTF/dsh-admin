@@ -50,12 +50,13 @@ async function readDescription(manifestPath: string): Promise<string> {
 export async function listInstalledPlugins(config: ServerConfig, userId: string): Promise<PluginInfo[]> {
   const dir = profileDir(config, userId)
   const manifest = (await readJson(join(dir, 'package.json'))) as
-    | { dsh?: { profile?: { bundles?: string[] } } }
+    | { dsh?: { profile?: { bundles?: unknown[] } } }
     | null
   if (manifest === null) return []
   const bundles = manifest.dsh?.profile?.bundles ?? []
   const plugins = await Promise.all(
     bundles
+      .filter((packageName): packageName is string => typeof packageName === 'string')
       .filter((packageName) => !packageName.startsWith(INSTALLATION_SCOPE))
       .map(async (packageName) => ({
         id: packageName,

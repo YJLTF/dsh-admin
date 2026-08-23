@@ -23,6 +23,8 @@ const HELP = `dsh-admin — DSH 服务器登录编排器
 用法：
   dsh-admin [选项]                          启动服务器
   dsh-admin bootstrap-admin [选项]          创建首位管理员
+  dsh-admin uid-for-user <userId>           查询用户对应的确定性 uid
+                                            （账号级隔离建号用，见 docs/hard-isolation.md）
 
 服务器选项：
   --port <n>        绑定端口（0 = 临时端口）。默认 3080。

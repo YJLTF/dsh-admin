@@ -27,7 +27,8 @@
     return 'text'
   }
   function fmtSize(bytes) {
-    if (!bytes) return '—'
+    if (bytes == null) return '—'
+    if (!bytes) return '0 B'
     var u = ['B', 'KB', 'MB', 'GB']
     var i = 0
     var n = bytes
@@ -132,13 +133,18 @@
     })
 
     // ---------- 同步桌面 + 文件窗口 ----------
+    // 序号防串台：并发 syncAll（上传完成回调 vs 用户导航）时先发后至
+    // 的响应若不丢弃，会把旧目录的条目配上新目录的路径渲染。
+    var syncSeq = 0
     async function syncAll() {
       $('dshFolder').textContent = pathString() || '根目录'
       deskPathEl.textContent = deskPathLabel()
       backBtn.classList.toggle('hidden', currentPath.length === 0)
       var p = pathString()
+      var seq = ++syncSeq
       // 一次目录树请求同时供桌面网格和文件窗口使用。
       var r = await api('/api/desktop/tree' + (p ? '?path=' + encodeURIComponent(p) : ''))
+      if (seq !== syncSeq) return
       var entries = r.ok ? (r.body.entries || []) : []
       renderDesktop(entries)
       renderFiles(entries)
@@ -314,7 +320,7 @@
       xhr.onload = function () {
         var body = xhr.response || {}
         if (xhr.status === 200) {
-          showUploadToast('已上传 ' + (body.count || files.length) + ' 个文件', null)
+          showUploadToast('已上传 ' + (body.count != null ? body.count : files.length) + ' 个文件', null)
           hideUploadToastLater()
           syncAll()
         } else {

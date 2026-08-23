@@ -311,7 +311,9 @@
         // 以便残留条目总能从界面上清除。
         document.getElementById('stopBtn').classList.toggle('hidden', inst === null)
         document.getElementById('openDshBtn').classList.toggle('hidden', !(st === 'running' && body.url))
-        if (st === 'running' && body.url) document.getElementById('openDshBtn').onclick = () => window.open(body.url, '_blank')
+        // noopener：被打开的 DSH 页面内容用户可控，不得保留对管理台
+        // 标签页的 window.opener 引用（tabnabbing）。
+        if (st === 'running' && body.url) document.getElementById('openDshBtn').onclick = () => window.open(body.url, '_blank', 'noopener,noreferrer')
         const launchBtn = document.getElementById('launchBtn')
         launchBtn.disabled = st === 'starting'
         launchBtn.textContent = st === 'starting' ? '启动中…' : '启动 DSH'
@@ -389,12 +391,16 @@
       })
 
       let pluginCatalog = []
+      // 面板打开期间用户可能导航到别的目录；记录加载时的目录，
+      // 保存前校验，避免把 A 目录的选择写到 B 目录。
+      let pluginFolder = ''
       async function loadPlugins() {
         const folder = pathString()
         const r = await api('/api/plugins' + (folder ? '?folder=' + encodeURIComponent(folder) : ''))
         if (!r.ok) return
         const { plugins } = r.body
         pluginCatalog = plugins
+        pluginFolder = folder
         const list = document.getElementById('pluginList')
         list.innerHTML = plugins.length === 0 ? '<p class="hint">暂无可用插件</p>' : ''
         for (const plugin of plugins) {
@@ -411,8 +417,13 @@
       })
       document.getElementById('savePluginsBtn').addEventListener('click', async (event) => {
         const btn = event.currentTarget
+        if (pluginFolder !== pathString()) {
+          alert('当前目录已切换，已重新加载该目录的插件选择（未保存）')
+          await loadPlugins()
+          return
+        }
         btn.disabled = true
-        const plugins = pluginCatalog.map((p) => ({ id: p.id, enabled: document.querySelector(`input[data-id="${CSS.escape(p.id)}"]`).checked }))
+        const plugins = pluginCatalog.map((p) => ({ id: p.id, enabled: document.querySelector(`input[data-id="${CSS.escape(p.id)}"]`)?.checked === true }))
         const r = await api('/api/plugins/select', { method: 'POST', body: JSON.stringify({ folder: pathString(), plugins }) })
         btn.disabled = false
         if (r.ok) alert('已保存')
