@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import type { ServerConfig } from '../config.js'
 import { openDatabase, type Database } from '../db/connection.js'
-import { type PublicUser } from '../db/repo.js'
+import { type PublicUser, purgeExpiredSessions } from '../db/repo.js'
 import { Supervisor } from '../supervisor/orchestrator.js'
 import { rateLimit } from './middleware/rate-limit.js'
 import { authRoutes } from './routes/auth.js'
@@ -20,6 +20,8 @@ import { fsRoutes } from './routes/fs.js'
 import { dshRoutes } from './routes/dsh.js'
 import { pluginRoutes } from './routes/plugins.js'
 import { sharedConfigRoutes } from './routes/shared-config.js'
+import { opsRoutes } from './routes/ops.js'
+import { marketRoutes } from './routes/market.js'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -71,7 +73,13 @@ export async function buildServer(config: ServerConfig): Promise<FastifyInstance
   app.decorate('supervisor', supervisor)
   app.decorateRequest('user', null)
 
+  // 过期会话清扫。历史版本搭在登录上（低频、够用）；现在会话表
+  // 承载设备管理功能，无人登录的部署也不能让死行无限滞留。
+  const sessionSweeper = setInterval(() => purgeExpiredSessions(db), 60 * 60 * 1000)
+  sessionSweeper.unref()
+
   app.addHook('onClose', async () => {
+    clearInterval(sessionSweeper)
     supervisor.teardown()
     db.close()
   })
@@ -100,6 +108,8 @@ export async function buildServer(config: ServerConfig): Promise<FastifyInstance
   await app.register(dshRoutes)
   await app.register(pluginRoutes)
   await app.register(sharedConfigRoutes)
+  await app.register(opsRoutes)
+  await app.register(marketRoutes)
 
   // 静态占位 SPA 最后注册，让精确的 API 路由优先于
   // 通配的静态处理器。

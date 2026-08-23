@@ -185,6 +185,41 @@ try {
   r = await json('/api/fs/move', { method: 'POST', cookie, body: { path: 'proj/pack/inner', dest: 'nope' } })
   assert(r.status === 404, '目标目录不存在返回 404')
 
+  // ---------- 文本编辑保存 ----------
+  r = await json('/api/fs/write', { method: 'POST', cookie, body: { path: 'proj/sub/hi.txt', content: 'edited!' } })
+  console.log('write 编辑      ->', r.status)
+  assert(r.status === 200 && r.body.size === 7, '保存修改成功')
+  r = await json('/api/fs/read?path=' + encodeURIComponent('proj/sub/hi.txt'), { cookie })
+  assert(r.body.text === 'edited!', '读回编辑后的内容')
+  r = await json('/api/fs/write', { method: 'POST', cookie, body: { path: 'proj', content: 'x' } })
+  assert(r.status === 400 && r.body.error === 'is_dir', '对目录写入返回 400')
+  r = await json('/api/fs/write', { method: 'POST', cookie, body: { path: 'ghost.txt', content: 'x' } })
+  assert(r.status === 404, '写不存在的文件返回 404（编辑只覆盖已有文件）')
+  r = await json('/api/fs/write', { method: 'POST', cookie, body: { path: '../evil.txt', content: 'x' } })
+  assert(r.status === 400, '路径越界写入被拒绝')
+
+  // ---------- 目录 zip 下载 ----------
+  res = await fetch(base + '/api/fs/zip?path=proj', { headers: { cookie } })
+  console.log('zip 目录        ->', res.status)
+  assert(res.status === 200, 'zip 下载 200')
+  assert((res.headers.get('content-type') || '').includes('zip'), 'zip content-type 正确')
+  const zipBytes = Buffer.from(await res.arrayBuffer())
+  assert(zipBytes.length > 100 && zipBytes[0] === 0x50 && zipBytes[1] === 0x4b, '响应体是 zip（PK 魔数）')
+  res = await fetch(base + '/api/fs/zip?path=proj/ghost', { headers: { cookie } })
+  assert(res.status === 404, 'zip 不存在目录返回 404')
+  res = await fetch(base + '/api/fs/zip?path=' + encodeURIComponent('proj/dup.txt'), { headers: { cookie } })
+  assert(res.status === 400, 'zip 对文件返回 400')
+
+  // ---------- 全工作区搜索 ----------
+  r = await json('/api/fs/search?q=dup', { cookie })
+  console.log('search dup      ->', r.status, r.body?.results?.length)
+  assert(r.status === 200 && r.body.results.length === 2, '搜索命中 proj/dup.txt 与 proj/sub/dup.txt')
+  assert(r.body.results.every((h) => h.path.includes('dup')), '结果路径包含关键词')
+  r = await json('/api/fs/search?q=zzz-nothing', { cookie })
+  assert(r.status === 200 && r.body.results.length === 0, '无命中返回空结果')
+  r = await json('/api/fs/search?q=', { cookie })
+  assert(r.status === 400, '空关键词返回 400')
+
   // ---------- 删除 ----------
   r = await json('/api/fs/delete', { method: 'POST', cookie, body: { path: 'proj/long.txt' } })
   console.log('delete 文件     ->', r.status)

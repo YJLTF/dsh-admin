@@ -28,18 +28,25 @@ function profileDir(config: ServerConfig, userId: string): string {
   return join(userHomeDir(config, userId), 'profiles', MAIN_PROFILE)
 }
 
+/** 读取 package.json 的 `description`，容忍字段或文件缺失/为空。
+ * 依赖可能被 pnpm workspace 提升到 `profiles/node_modules`（真实容器
+ * 布局实测），也可能在 profile 自己的 `node_modules` 里（市场安装
+ * 落点）——两处都试。 */
+async function readDescription(config: ServerConfig, userId: string, packageName: string): Promise<string> {
+  const home = userHomeDir(config, userId)
+  for (const base of [join(profileDir(config, userId), 'node_modules'), join(home, 'profiles', 'node_modules')]) {
+    const parsed = (await readJson(join(base, packageName, 'package.json'))) as { description?: unknown } | null
+    if (typeof parsed?.description === 'string' && parsed.description !== '') return parsed.description
+  }
+  return ''
+}
+
 async function readJson(file: string): Promise<unknown> {
   try {
     return JSON.parse(await readFile(file, 'utf8'))
   } catch {
     return null
   }
-}
-
-/** 读取 package.json 的 `description`，容忍字段或文件缺失/为空。 */
-async function readDescription(manifestPath: string): Promise<string> {
-  const parsed = (await readJson(manifestPath)) as { description?: unknown } | null
-  return typeof parsed?.description === 'string' ? parsed.description : ''
 }
 
 /**
@@ -61,7 +68,7 @@ export async function listInstalledPlugins(config: ServerConfig, userId: string)
       .map(async (packageName) => ({
         id: packageName,
         name: packageName,
-        description: await readDescription(join(dir, 'node_modules', packageName, 'package.json')),
+        description: await readDescription(config, userId, packageName),
       })),
   )
   return plugins

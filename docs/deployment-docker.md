@@ -67,9 +67,12 @@ docker compose exec dsh-admin node lib/cli.js bootstrap-admin \
 
 ## 数据持久化
 
-bind mount `./dsh-data`（容器内 `/var/lib/dsh-admin`）存放 SQLite 数据库与
-每用户 home/workspace。**备份它**。`./dsh-cli`（容器内 `/opt/dsh`）是 dsh CLI
-的运行时安装位置（见下方升级）。
+bind mount `./dsh-data`（容器内 `/var/lib/dsh-admin`）存放 SQLite 数据库、
+每用户 home/workspace 与插件市场收录目录（`market/`）。**备份它**。
+`./dsh-cli`（容器内 `/opt/dsh`）是 dsh CLI 的运行时安装位置（见下方升级）。
+
+容器健康检查探测 `GET /healthz`（含实例计数与 uptime 的最小探活端点）；
+实例是否真正可用以 `docker ps` 的 health 状态为准。
 
 ## 升级 / 日常运维
 

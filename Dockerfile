@@ -40,8 +40,9 @@ EXPOSE 3080
 # 子 DSH 端口范围需单独发布，例如：
 #   docker run -p 3080:3080 -p 40000-40100:40000-40100 ...
 # （请将 DSH_ADMIN_DSH_PORT_MIN/MAX 设置为相同的范围）。
+# 健康检查走 /healthz（含 DB 可用性的最小探活，见 ops.ts），而非静态页。
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD node -e "fetch('http://127.0.0.1:'+(process.env.DSH_ADMIN_PORT||3080)+'/login.html').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+    CMD node -e "fetch('http://127.0.0.1:'+(process.env.DSH_ADMIN_PORT||3080)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 # 首次启动时向 /opt/dsh 播种基线版本，随后 exec 保持 node 为 PID 1
 # （终止时会杀死子 DSH 进程并接收 SIGTERM）。
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

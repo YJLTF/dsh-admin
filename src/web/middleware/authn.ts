@@ -8,8 +8,12 @@
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { findSessionWithUser, toPublicUser } from '../../db/repo.js'
+import { findSessionWithUser, toPublicUser, touchSession } from '../../db/repo.js'
 import { hashSessionToken, parseCookie } from '../auth.js'
+
+/** last_used_at 回写节流窗口：同会话 60 秒内最多写一次，
+ * 认证热路径基本零额外开销。 */
+const TOUCH_INTERVAL_MS = 60_000
 
 /** 把会话 cookie 解析为 `request.user`，否则以 401 拒绝。 */
 export async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
@@ -18,11 +22,13 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
     reply.code(401).send({ error: 'unauthorized' })
     return
   }
-  const row = findSessionWithUser(request.server.db, hashSessionToken(token))
+  const tokenHash = hashSessionToken(token)
+  const row = findSessionWithUser(request.server.db, tokenHash)
   if (row === undefined || row.expiresAt <= Date.now() || row.user.role === 'disabled') {
     reply.code(401).send({ error: 'unauthorized' })
     return
   }
+  if (Date.now() - row.lastUsedAt > TOUCH_INTERVAL_MS) touchSession(request.server.db, tokenHash)
   request.user = toPublicUser(row.user)
 }
 

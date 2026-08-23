@@ -61,7 +61,7 @@ spawn(dshCommand, ['--profile', 'headless', WATCHDOG_TASK], { /* 同上 */ })
 
 ## 5. 数据模型（SQLite，migration v1）
 
-- v1 使用：`users`、`sessions`、`workspaces`、`folder_plugins`、`audit_log`。v3 增：`shared_config` / `shared_config_state`（共享模型配置）。v4 删：`credential_vault`（每用户密钥库）。v5 删：`domains`（域名/nginx 部署已移除）。v6 删：`dsh_instances` 幽灵表与 `users.api_key_ref` 残留列（实例状态按设计仅存内存）。
+- v1 使用：`users`、`sessions`、`workspaces`、`folder_plugins`、`audit_log`。v3 增：`shared_config` / `shared_config_state`（共享模型配置）。v4 删：`credential_vault`（每用户密钥库）。v5 删：`domains`（域名/nginx 部署已移除）。v6 删：`dsh_instances` 幽灵表与 `users.api_key_ref` 残留列（实例状态按设计仅存内存）。v7 增：`sessions.last_used_at`（设备管理）、`app_settings`（注册开关/邀请码）、`market_items` / `user_plugins`（离线插件市场），删 `folder_plugins.description` 死列。
 
 字段与约束见 `src/db/schema.ts`。
 
@@ -69,13 +69,15 @@ spawn(dshCommand, ['--profile', 'headless', WATCHDOG_TASK], { /* 同上 */ })
 
 | 组 | 路由 | 脚手架状态 |
 |---|---|---|
-| Auth | `POST /api/auth/register\|login\|logout`、`GET /api/auth/me` | 已实现（P1） |
-| Admin | `GET /api/admin/users`、`POST /api/admin/users/:id/approve\|disable\|enable` | 已实现（P1） |
-| Desktop/FS | `GET /api/desktop/tree`、`POST /api/fs/mkdir\|create\|upload(multipart)\|delete\|rename\|move`、`GET /api/fs/read`（文本预览）、`GET /api/fs/raw`（下载/内联流，支持 Range） | 已实现（P2；上传为 multipart 流式，文件夹上传保留相对路径） |
-| DSH | `POST /api/dsh/launch\|stop\|restart`、`GET /api/dsh/status` | 已实现（P3/P5，内网直连 + forwarder；main+watchdog 编排层） |
+| Auth | `POST /api/auth/register\|login\|logout`、`GET /api/auth/me`、`GET /api/meta`（注册门禁状态）、`POST /api/me/password`、`GET /api/me/sessions`、`DELETE /api/me/sessions/:id` | 已实现（P1/P8） |
+| Admin | `GET /api/admin/users`、`POST /api/admin/users/:id/approve\|disable\|enable\|reset-password\|delete`、`GET/PUT /api/admin/settings`、`GET /api/admin/audit` | 已实现（P1/P8） |
+| Ops | `GET /healthz`、`GET /api/admin/instances`、`POST /api/admin/instances/:userId/stop`、`GET /api/admin/storage` | 已实现（P8） |
+| Desktop/FS | `GET /api/desktop/tree`、`POST /api/fs/mkdir\|create\|upload(multipart)\|delete\|rename\|move\|write`、`GET /api/fs/read`（文本预览）、`GET /api/fs/raw`（下载/内联流，支持 Range）、`GET /api/fs/zip`（目录打包）、`GET /api/fs/search`（全工作区搜索） | 已实现（P2/P8；上传为 multipart 流式，文件夹上传保留相对路径） |
+| DSH | `POST /api/dsh/launch\|stop\|restart`、`GET /api/dsh/status`（含连续重启计数/熔断态） | 已实现（P3/P5/P8，内网直连 + forwarder；main+watchdog 编排层） |
 | Plugin | `GET /api/plugins`、`POST /api/plugins/select` | 已实现（P4） |
+| Market | `GET/POST/DELETE /api/admin/market*`、`GET /api/me/market`、`POST /api/me/market/:id/install`、`POST /api/me/market/uninstall` | 已实现（P8，见 [plugins-market.md](plugins-market.md)） |
 | SharedConfig | `GET/PUT /api/admin/shared-config`、`GET /api/me/shared-config`、`POST /api/me/shared-config/accept` | 已实现（[shared-config.md](shared-config.md)） |
-| 静态 | `GET /*`（`web/` 下的桌面 SPA：`desktop.html` + `window-manager.js` + `file-explorer.js` + `shared-config-editor.js`） | 已接 |
+| 静态 | `GET /*`（`web/` 下的桌面 SPA：`desktop.html` + `window-manager.js` + `file-explorer.js` + `shared-config-editor.js` + `account.js` + `market.js` + `admin-extras.js`） | 已接 |
 
 ## 7. 安全模型
 
@@ -84,3 +86,5 @@ spawn(dshCommand, ['--profile', 'headless', WATCHDOG_TASK], { /* 同上 */ })
 ## 8. 分阶段路线
 
 P1–P7 已完成：登录审核、桌面/FS、单 DSH 启动、每文件夹插件、守护/双 DSH、硬隔离、共享模型配置（域名/nginx 与每用户密钥库已随内网-only 瘦身移除）。
+
+**P8（v0.2.0）已完成**：账号与会话安全（自助改密/设备管理/审计日志/删用户/注册门禁）、运维面板（全局实例视图与单停、磁盘统计、`/healthz`、崩溃熔断 + 指数退避）、文件管理器增强（在线文本编辑、目录 zip 下载、排序与全工作区搜索）、插件/技能离线市场（管理员 tgz 收录 → 用户安装/更新/卸载，见 [plugins-market.md](plugins-market.md)）。

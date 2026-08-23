@@ -142,12 +142,15 @@
       backBtn.classList.toggle('hidden', currentPath.length === 0)
       var p = pathString()
       var seq = ++syncSeq
+      // 导航/上传/刷新都会改变目录内容，全工作区搜索结果随即失效。
+      if (searchMode) { searchMode = null; searchBox.value = '' }
       // 一次目录树请求同时供桌面网格和文件窗口使用。
       var r = await api('/api/desktop/tree' + (p ? '?path=' + encodeURIComponent(p) : ''))
       if (seq !== syncSeq) return
       var entries = r.ok ? (r.body.entries || []) : []
+      lastEntries = entries
       renderDesktop(entries)
-      renderFiles(entries)
+      renderFiles()
     }
     async function navigate(path) {
       currentPath = path ? path.split('/').filter(Boolean) : []
@@ -161,9 +164,16 @@
     // ---------- 文件窗口（表格 + 工具栏） ----------
     var rows = $('rows')
     var breadcrumb = $('breadcrumb')
+    var searchBox = $('searchBox')
+    // 当前目录的原始条目（过滤/排序在渲染时按需应用）。
+    var lastEntries = []
+    // 列排序状态；Enter 全工作区搜索结果模式（位置无关）。
+    var sortState = { key: null, dir: 1 }
+    var searchMode = null // { results, hasMore }
     var ACTIONS = {
       preview: '<button class="iconbtn" data-act="preview" title="预览"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>',
       download: '<button class="iconbtn" data-act="download" title="下载"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></button>',
+      zip: '<button class="iconbtn" data-act="zip" title="打包下载 zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V3h13l5 5z"/><path d="M12 3v5h5"/><path d="M10 12h2m-2 3h2m-2 3h2"/></svg></button>',
       rename: '<button class="iconbtn" data-act="rename" title="重命名"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg></button>',
       move: '<button class="iconbtn" data-act="move" title="移动到…"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></button>',
       del: '<button class="iconbtn danger" data-act="del" title="删除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>',
@@ -177,11 +187,30 @@
       }
       breadcrumb.innerHTML = parts.join('')
     }
-    function renderFiles(entries) {
+    /** 渲染前应用：当前目录客户端过滤（搜索框有值且不在全盘搜索模式）
+     * + 列排序（名称/大小/修改时间，再点切换升降序）。 */
+    function visibleEntries() {
+      var list = lastEntries.slice()
+      var q = searchBox.value.trim().toLowerCase()
+      if (q) {
+        list = list.filter(function (e) { return e.name.toLowerCase().indexOf(q) !== -1 })
+      }
+      if (sortState.key) {
+        var key = sortState.key === 'mtime' ? 'mtimeMs' : sortState.key
+        var dir = sortState.dir
+        list.sort(function (a, b) {
+          var r = key === 'name' ? String(a.name).localeCompare(String(b.name), 'zh-Hans-CN') : (a[key] || 0) - (b[key] || 0)
+          return r * dir
+        })
+      }
+      return list
+    }
+    function renderFiles() {
       var p = pathString()
       rows.innerHTML = ''
+      var entries = visibleEntries()
       if (!entries.length) {
-        rows.innerHTML = '<tr class="empty"><td colspan="5">此文件夹为空</td></tr>'
+        rows.innerHTML = '<tr class="empty"><td colspan="5">' + (lastEntries.length ? '没有匹配的条目' : '此文件夹为空') + '</td></tr>'
       } else {
         if (p) rows.insertAdjacentHTML('beforeend', '<tr><td class="dir" data-up="1">..</td><td></td><td></td><td></td><td></td></tr>')
         for (var i = 0; i < entries.length; i++) {
@@ -194,6 +223,7 @@
             : ' class="name-cell" data-name="' + esc(e.name) + '"'
           var actions = ''
           if (e.type === 'file') actions += ACTIONS.preview + ACTIONS.download
+          else actions += ACTIONS.zip
           actions += ACTIONS.rename + ACTIONS.move + ACTIONS.del
           rows.insertAdjacentHTML(
             'beforeend',
@@ -203,7 +233,71 @@
       }
       renderBreadcrumb()
     }
+    // 列头点击排序（再点同列切换方向）。
+    Array.prototype.forEach.call(document.querySelectorAll('#win-files th[data-sort]'), function (th) {
+      th.addEventListener('click', function () {
+        var key = th.dataset.sort
+        if (sortState.key === key) sortState.dir = -sortState.dir
+        else sortState = { key: key, dir: 1 }
+        renderFiles()
+      })
+    })
+    // 搜索框：输入 = 过滤当前目录；Enter = 全工作区搜索；Esc = 清除。
+    searchBox.addEventListener('input', function () {
+      if (searchMode) { searchMode = null; searchBox.value = '' }
+      renderFiles()
+    })
+    searchBox.addEventListener('keydown', async function (event) {
+      if (event.key === 'Escape') {
+        searchBox.value = ''
+        searchMode = null
+        renderFiles()
+        return
+      }
+      if (event.key !== 'Enter') return
+      var q = searchBox.value.trim()
+      if (!q) { searchMode = null; renderFiles(); return }
+      var r = await api('/api/fs/search?q=' + encodeURIComponent(q))
+      if (!r.ok) { alert('搜索失败：' + r.error); return }
+      searchMode = { results: r.body.results || [], hasMore: !!r.body.hasMore }
+      renderSearchResults()
+    })
+    /** 全工作区搜索结果（路径与当前位置无关；点击目录进入、文件预览）。 */
+    function renderSearchResults() {
+      rows.innerHTML = ''
+      var head = '搜索到 ' + searchMode.results.length + ' 项' +
+        (searchMode.hasMore ? '（已达 200 项上限，请细化关键词）' : '') +
+        ' <button class="btn small ghost" id="exitSearchBtn">退出搜索</button>'
+      rows.insertAdjacentHTML('beforeend', '<tr class="empty"><td colspan="5">' + head + '</td></tr>')
+      for (var i = 0; i < searchMode.results.length; i++) {
+        var hit = searchMode.results[i]
+        var icon = hit.type === 'dir'
+          ? '<svg class="ficon dir" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>'
+          : '<svg class="ficon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>'
+        rows.insertAdjacentHTML(
+          'beforeend',
+          '<tr class="search-hit" data-path="' + esc(hit.path) + '" data-type="' + hit.type + '"><td class="name-cell">' + icon + esc(hit.path) + '</td><td>' + (hit.type === 'dir' ? '文件夹' : '文件') + '</td><td>' + fmtSize(hit.size) + '</td><td>' + new Date(hit.mtimeMs).toLocaleString() + '</td><td class="actions"><button class="btn small ghost" data-open-hit="1">打开</button></td></tr>',
+        )
+      }
+    }
     rows.addEventListener('click', async function (event) {
+      // 全工作区搜索结果模式：目录进入、文件预览；退出按钮回列表。
+      if (searchMode) {
+        if (event.target.closest('#exitSearchBtn')) {
+          searchMode = null
+          searchBox.value = ''
+          renderFiles()
+          return
+        }
+        var openBtn = event.target.closest('button[data-open-hit]')
+        if (openBtn) {
+          var hitRow = openBtn.closest('tr.search-hit')
+          if (hitRow.dataset.type === 'dir') navigate(hitRow.dataset.path)
+          else openPreview(hitRow.dataset.path)
+          return
+        }
+        return
+      }
       var btn = event.target.closest('.iconbtn[data-act]')
       if (btn) {
         var tr = btn.closest('tr')
@@ -211,6 +305,7 @@
         var act = btn.dataset.act
         if (act === 'preview') openPreview(entryPathStr)
         else if (act === 'download') triggerDownload(entryPathStr)
+        else if (act === 'zip') triggerZipDownload(entryPathStr)
         else if (act === 'rename') openRename(entryPathStr)
         else if (act === 'move') openMove(entryPathStr)
         else if (act === 'del') delEntry(entryPathStr, tr.dataset.type)
@@ -364,6 +459,15 @@
       a.click()
       a.remove()
     }
+    /** 文件夹打包下载（服务端流式 zip）。 */
+    function triggerZipDownload(path) {
+      var a = document.createElement('a')
+      a.href = '/api/fs/zip?path=' + encodeURIComponent(path)
+      a.download = ''
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    }
 
     // ---------- 重命名对话框 ----------
     var renameDialog = $('renameDialog')
@@ -479,13 +583,67 @@
     var previewTitle = $('previewTitle')
     var previewBody = $('previewBody')
     var previewDownload = $('previewDownload')
+    var previewEdit = $('previewEdit')
+    var previewSave = $('previewSave')
+    var previewCancelEdit = $('previewCancelEdit')
     var previewPath = ''
+    // 文本编辑态：原始内容快照 + 编辑用 textarea（保存走 /api/fs/write）。
+    var editText = null
+    var editArea = null
+    /** 1MB 以内的未截断文本才提供在线编辑，避免大文件拖垮浏览器。 */
+    var EDIT_MAX_BYTES = 1024 * 1024
+    function resetEditButtons() {
+      previewEdit.classList.add('hidden')
+      previewSave.classList.add('hidden')
+      previewCancelEdit.classList.add('hidden')
+    }
     function closePreview() {
       previewModal.classList.add('hidden')
       // 清空内容，停止视频/音频播放。
       previewBody.innerHTML = ''
       previewPath = ''
+      editText = null
+      editArea = null
     }
+    function renderTextPre(text) {
+      var pre = el('pre', 'preview-text')
+      pre.textContent = text
+      previewBody.innerHTML = ''
+      previewBody.appendChild(pre)
+    }
+    previewEdit.addEventListener('click', function () {
+      if (editText === null) return
+      editArea = el('textarea', 'preview-editor')
+      editArea.value = editText
+      previewBody.innerHTML = ''
+      previewBody.appendChild(editArea)
+      previewEdit.classList.add('hidden')
+      previewSave.classList.remove('hidden')
+      previewCancelEdit.classList.remove('hidden')
+      editArea.focus()
+    })
+    previewCancelEdit.addEventListener('click', function () {
+      renderTextPre(editText)
+      previewEdit.classList.remove('hidden')
+      previewSave.classList.add('hidden')
+      previewCancelEdit.classList.add('hidden')
+      editArea = null
+    })
+    previewSave.addEventListener('click', async function () {
+      if (editArea === null || previewPath === '') return
+      var btn = previewSave
+      btn.disabled = true
+      var r = await api('/api/fs/write', { method: 'POST', body: JSON.stringify({ path: previewPath, content: editArea.value }) })
+      btn.disabled = false
+      if (!r.ok) { alert('保存失败：' + (r.error === 'too_large' ? '内容超过大小上限' : r.error)); return }
+      editText = editArea.value
+      editArea = null
+      renderTextPre(editText)
+      previewEdit.classList.remove('hidden')
+      previewSave.classList.add('hidden')
+      previewCancelEdit.classList.add('hidden')
+      syncAll()
+    })
     previewModal.addEventListener('click', function (event) { if (event.target === previewModal) closePreview() })
     $('previewCloseBtn').addEventListener('click', closePreview)
     document.addEventListener('keydown', function (event) {
@@ -504,6 +662,9 @@
       previewBody.innerHTML = ''
       previewModal.classList.remove('hidden')
       previewDownload.classList.add('hidden')
+      resetEditButtons()
+      editText = null
+      editArea = null
       var kind = previewKind(name)
       var url = rawUrl(path, false)
       if (kind === 'image') {
@@ -559,6 +720,11 @@
       pre.textContent = r.body.text
       previewBody.appendChild(pre)
       previewDownload.classList.remove('hidden')
+      // 未截断且 ≤1MB 的文本可在线编辑（写回走 /api/fs/write 原子覆盖）。
+      if (!r.body.truncated && r.body.size <= EDIT_MAX_BYTES) {
+        editText = r.body.text
+        previewEdit.classList.remove('hidden')
+      }
     }
     function renderBinaryInfo(name) {
       var info = el('div', 'preview-binary')

@@ -126,7 +126,14 @@ export const dshRoutes: FastifyPluginAsync = async (app) => {
     return {
       running: alive(main?.status),
       instance: main
-        ? { id: main.id, port: main.port, status: main.status, exitCode: main.exitCode, lastError: main.lastError }
+        ? {
+            id: main.id,
+            port: main.port,
+            status: main.status,
+            exitCode: main.exitCode,
+            lastError: main.lastError,
+            restarts: main.restarts ?? 0,
+          }
         : null,
       watchdog: watchdog ? { id: watchdog.id, status: watchdog.status, exitCode: watchdog.exitCode } : null,
       url: dshUrl(app.config, main?.port, main?.token),

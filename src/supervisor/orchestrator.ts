@@ -39,12 +39,27 @@ export interface Instance {
   port?: number
   status: InstanceStatus
   pid?: number
+  startedAt: number
   exitCode?: number
   lastError?: string
   patchPath?: string
+  /** 连续自动重启次数；就绪成功或手动（重）启动时归零。供熔断与展示。 */
+  restarts?: number
   /** 内网模式下转发器的访问令牌；随每次（重）拉起轮换。
    * 仅通过已认证的 API（launch/restart/status 返回的 url）交付给属主。 */
   token?: string
+}
+
+/** 管理台全局实例视图的单行快照。 */
+export interface InstanceSummary {
+  userId: string
+  role: InstanceRole
+  status: InstanceStatus
+  port?: number
+  pid?: number
+  startedAt: number
+  restarts: number
+  lastError?: string
 }
 
 /** 就绪探测参数：间隔与最长探测时长（超时后保持 starting，
@@ -145,6 +160,21 @@ export class Supervisor {
     return { main: this.mains.get(userId), watchdog: this.watchdogs.get(userId) }
   }
 
+  /** 全部被跟踪实例的快照（管理台全局视图；主实例在前）。 */
+  listInstances(): InstanceSummary[] {
+    const summarize = (instance: Instance): InstanceSummary => ({
+      userId: instance.userId,
+      role: instance.role,
+      status: instance.status,
+      port: instance.port,
+      pid: instance.pid,
+      startedAt: instance.startedAt,
+      restarts: instance.restarts ?? 0,
+      lastError: instance.lastError,
+    })
+    return [...this.mains.values()].map(summarize).concat([...this.watchdogs.values()].map(summarize))
+  }
+
   /** 用户运行中主 DSH 的环回端口（若有）。 */
   portFor(userId: string): number | undefined {
     return this.mains.get(userId)?.port
@@ -188,7 +218,13 @@ export class Supervisor {
     }
   }
 
-  private async spawnInstance(userId: string, role: InstanceRole, folder: string, patchPath?: string): Promise<Instance> {
+  private async spawnInstance(
+    userId: string,
+    role: InstanceRole,
+    folder: string,
+    patchPath?: string,
+    carryRestarts = 0,
+  ): Promise<Instance> {
     // 令牌与端口同生命周期：崩溃重启（新端口）自然换新令牌；
     // 手动重启也换新 —— 旧链接立即作废，无残留窗口。
     const instance: Instance = {
@@ -197,6 +233,8 @@ export class Supervisor {
       role,
       folder,
       status: 'starting',
+      startedAt: Date.now(),
+      restarts: carryRestarts,
       patchPath,
       token: role === 'main' && this.config.publicHost !== '' ? randomBytes(32).toString('base64url') : undefined,
     }
@@ -374,16 +412,29 @@ export class Supervisor {
   }
 
   private scheduleRestart(userId: string, instance: Instance): void {
+    const restarts = (instance.restarts ?? 0) + 1
+    const max = this.config.maxAutoRestarts
+    if (max > 0 && restarts > max) {
+      // 熔断：自动重启上限已到仍持续崩溃，停止重拉等用户处理。
+      // 条目留在 map 里保持 crashed（可被 launch 清理重启）。
+      instance.restarts = restarts
+      instance.lastError = `已自动重启 ${restarts - 1} 次仍持续崩溃，停止自动重启（熔断）；请检查子进程日志后手动启动`
+      return
+    }
+    instance.restarts = restarts
+    // 指数退避（封顶 30s）：持续失败时 1s 固定延迟会让崩溃循环以
+    // 全速空转，退避把无效重启的资源消耗压下来。
+    const delay = Math.min(this.config.restartBackoffMs * 2 ** (restarts - 1), 30_000)
     const timer = setTimeout(() => {
       this.restartTimers.delete(userId)
-      this.spawnInstance(userId, instance.role, instance.folder, instance.patchPath).catch(
+      this.spawnInstance(userId, instance.role, instance.folder, instance.patchPath, restarts).catch(
         (err: unknown) => {
           // spawnInstance 已把失败写进实例（crashed + lastError）；
           // 这里只需让重启失败在日志里可见。
           process.stderr.write(`[restart ${userId}] ${String(err)}\n`)
         },
       )
-    }, this.config.restartBackoffMs)
+    }, delay)
     timer.unref()
     this.restartTimers.set(userId, timer)
   }
@@ -395,7 +446,11 @@ export class Supervisor {
     while (instance.status === 'starting' && Date.now() < deadline) {
       if (await probePort(instance.port!)) {
         // 仅当仍是同一个 starting 实例时转 running（探测期间可能已崩溃/停止）。
-        if (instance.status === 'starting') instance.status = 'running'
+        if (instance.status === 'starting') {
+          instance.status = 'running'
+          // 服务真正可用 = 本轮崩溃循环结束，熔断计数归零。
+          instance.restarts = 0
+        }
         return
       }
       await new Promise((resolve) => setTimeout(resolve, READY_PROBE_INTERVAL_MS))

@@ -35,6 +35,8 @@ export interface ServerConfig {
   previewBytes: number
   /** 崩溃的子 DSH 自动重启前的延迟（毫秒）。 */
   restartBackoffMs: number
+  /** 连续自动重启的熔断上限；超过后停止自动重拉（0 = 不熔断）。 */
+  maxAutoRestarts: number
   /** 隔离级别（见 {@link IsolationMode}）。 */
   isolationMode: IsolationMode
   /** 用于降权的 argv 前缀；其中的 `{UID}`/`{GID}` 会被替换。 */
@@ -71,6 +73,7 @@ export interface ConfigOverrides {
   maxFileBytes?: number | string
   previewBytes?: number | string
   restartBackoffMs?: number | string
+  maxAutoRestarts?: number | string
   isolationMode?: IsolationMode | string
   spawnAsUserCommand?: string[]
   baseUid?: number | string
@@ -91,6 +94,7 @@ const DEFAULT_MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 const DEFAULT_MAX_FILE_BYTES = 1024 * 1024 * 1024
 const DEFAULT_PREVIEW_BYTES = 256 * 1024
 const DEFAULT_RESTART_BACKOFF_MS = 1000
+const DEFAULT_MAX_AUTO_RESTARTS = 5
 const DEFAULT_ISOLATION_MODE: IsolationMode = 'soft'
 const DEFAULT_SPAWN_AS_USER_COMMAND = [
   'setpriv',
@@ -228,6 +232,12 @@ export function resolveConfig(overrides: ConfigOverrides = {}): ServerConfig {
       overrides.restartBackoffMs ?? process.env.DSH_ADMIN_RESTART_BACKOFF ?? DEFAULT_RESTART_BACKOFF_MS,
       DEFAULT_RESTART_BACKOFF_MS,
       '重启退避（毫秒）',
+      0,
+    ),
+    maxAutoRestarts: toNumber(
+      overrides.maxAutoRestarts ?? process.env.DSH_ADMIN_MAX_AUTO_RESTARTS ?? DEFAULT_MAX_AUTO_RESTARTS,
+      DEFAULT_MAX_AUTO_RESTARTS,
+      '自动重启熔断上限',
       0,
     ),
     isolationMode,

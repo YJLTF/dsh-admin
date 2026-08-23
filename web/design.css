@@ -371,3 +371,14 @@ table.admin tr.empty td { color: var(--ink-soft); text-align: center; padding: 2
 .prov-card .sub-label { font-size: 11px; color: var(--ink-soft); margin: 10px 0 6px; }
 .prov-card .mrow { display: grid; grid-template-columns: minmax(150px, 1fr) auto 30px; gap: 8px; align-items: center; margin-bottom: 6px; }
 .prov-card .mrow .btn { justify-self: end; }
+
+/* ---------- v0.2：文件搜索框 / 文本编辑器 / 市场卡片 / 提示态 ---------- */
+.searchbox { padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); font-size: 13px; color: var(--ink); min-width: 220px; }
+.searchbox:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(77, 124, 254, 0.15); }
+#win-files th[data-sort] { cursor: pointer; user-select: none; }
+#win-files th[data-sort]:hover { color: var(--accent); }
+.preview-editor { width: 100%; min-width: 60vw; max-width: 82vw; height: 50vh; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); font: 12.5px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--ink); resize: both; }
+.msg-error { color: var(--danger); font-size: 12px; margin: 2px 0; }
+.market-card { display: block; padding: 8px 10px; }
+.market-card .row-actions { margin-top: 4px; }
+.plugin-panel-tabs { display: flex; gap: 8px; margin-bottom: 8px; }

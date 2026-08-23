@@ -15,7 +15,7 @@
       </div>
       <p class="auth-sub">注册后需管理员审核方可登录</p>
 
-      <form id="register">
+      <form id="register" class="hidden">
         <div class="field">
           <label for="username">用户名（3–32 位字母/数字/下划线/连字符）</label>
           <input id="username" name="username" autocomplete="username" required />
@@ -24,9 +24,14 @@
           <label for="password">密码（至少 8 位）</label>
           <input id="password" name="password" type="password" autocomplete="new-password" required />
         </div>
+        <div class="field hidden" id="inviteField">
+          <label for="inviteCode">邀请码（向管理员索取）</label>
+          <input id="inviteCode" name="inviteCode" autocomplete="off" />
+        </div>
         <button class="btn primary" type="submit">注 册</button>
         <p class="msg" id="msg"></p>
       </form>
+      <p class="msg err hidden" id="closedMsg">注册当前已关闭，请联系管理员开通账号。</p>
 
       <p class="auth-alt">已有账号？<a href="/login.html">登录</a></p>
     </div>
@@ -34,6 +39,22 @@
     <script>
       const form = document.getElementById('register')
       const msg = document.getElementById('msg')
+      // 注册门禁适配：关闭时直接提示；要求邀请码时显示输入框。
+      void (async () => {
+        try {
+          const res = await fetch('/api/meta')
+          if (!res.ok) throw new Error()
+          const meta = await res.json()
+          if (meta.allowRegister === false) {
+            document.getElementById('closedMsg').classList.remove('hidden')
+            return
+          }
+          if (meta.inviteRequired) document.getElementById('inviteField').classList.remove('hidden')
+          form.classList.remove('hidden')
+        } catch {
+          form.classList.remove('hidden')
+        }
+      })()
       form.addEventListener('submit', async (event) => {
         event.preventDefault()
         msg.textContent = ''
@@ -41,14 +62,27 @@
         const btn = form.querySelector('button[type="submit"]')
         btn.disabled = true
         try {
+          const invite = document.getElementById('inviteCode')
+          const payload = { username: form.username.value, password: form.password.value }
+          if (invite && invite.value.trim() !== '') payload.inviteCode = invite.value.trim()
           const res = await fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ username: form.username.value, password: form.password.value }),
+            body: JSON.stringify(payload),
           })
           const body = await res.json().catch(() => ({}))
           if (!res.ok) {
-            msg.textContent = body.error === 'username_taken' ? '用户名已被占用' : body.message || '注册失败'
+            const errMap = {
+              username_taken: '用户名已被占用',
+              registrations_disabled: '注册已关闭，请联系管理员',
+              invalid_invite: '邀请码不正确',
+            }
+            if (body.error === 'registrations_disabled') {
+              form.classList.add('hidden')
+              document.getElementById('closedMsg').classList.remove('hidden')
+              return
+            }
+            msg.textContent = errMap[body.error] || body.message || '注册失败'
             return
           }
           msg.className = 'msg ok'

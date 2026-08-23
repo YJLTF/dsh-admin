@@ -19,6 +19,7 @@
         <div class="right">
           <span class="role hidden" id="roleBadge"></span>
           <span class="who" id="who"></span>
+          <button class="btn ghost small" id="accountBtn" data-open="account">账户</button>
           <button class="btn ghost small logout" id="logoutBtn">退出</button>
         </div>
       </div>
@@ -56,6 +57,22 @@
         <div class="desk-icon hidden" id="sharedIcon" data-open="shared" role="button" tabindex="0">
           <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></div>
           <span class="label">共享配置</span>
+        </div>
+        <div class="desk-icon hidden" id="opsIcon" data-open="ops" role="button" tabindex="0">
+          <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
+          <span class="label">运维监控</span>
+        </div>
+        <div class="desk-icon hidden" id="marketIcon" data-open="market" role="button" tabindex="0">
+          <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 13h6"/></svg></div>
+          <span class="label">插件市场</span>
+        </div>
+        <div class="desk-icon hidden" id="auditIcon" data-open="audit" role="button" tabindex="0">
+          <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-7-4-7 4z"/></svg></div>
+          <span class="label">审计日志</span>
+        </div>
+        <div class="desk-icon hidden" id="settingsIcon" data-open="settings" role="button" tabindex="0">
+          <div class="tile admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div>
+          <span class="label">系统设置</span>
         </div>
         <div class="desk-divider"></div>
         <div id="fileIcons"></div>
@@ -129,6 +146,9 @@
         <div class="preview-body" id="previewBody"></div>
         <div class="row-actions modal-actions">
           <span class="hint" style="flex:1"></span>
+          <button class="btn ghost hidden" id="previewEdit">编辑</button>
+          <button class="btn primary hidden" id="previewSave">保存修改</button>
+          <button class="btn ghost hidden" id="previewCancelEdit">取消编辑</button>
           <button class="btn primary hidden" id="previewDownload">下载</button>
         </div>
       </div>
@@ -159,14 +179,22 @@
         <div class="row-actions">
           <button class="btn primary" id="launchBtn">启动 DSH</button>
           <button class="btn ghost hidden" id="stopBtn">停止</button>
+          <button class="btn ghost hidden" id="restartBtn">重启</button>
           <button class="btn ghost hidden" id="openDshBtn">打开 DSH ↗</button>
           <button class="btn ghost" id="managePluginsBtn">管理插件</button>
         </div>
         <div class="section-label">在此文件夹启动：<span id="dshFolder">根目录</span></div>
         <div class="hidden" id="pluginPanel">
-          <div class="section-label">当前文件夹插件</div>
-          <div id="pluginList"></div>
-          <button class="btn primary small" id="savePluginsBtn" style="margin-top:10px">保存插件选择</button>
+          <div class="row-actions">
+            <button class="btn small primary" id="pluginTabEnabled">本文件夹启用</button>
+            <button class="btn small ghost" id="pluginTabMarket">插件市场</button>
+          </div>
+          <div id="pluginPaneEnabled">
+            <div class="section-label">当前文件夹插件</div>
+            <div id="pluginList"></div>
+            <button class="btn primary small" id="savePluginsBtn" style="margin-top:10px">保存插件选择</button>
+          </div>
+          <div id="pluginPaneMarket" class="hidden"></div>
         </div>
       </div>
       <div class="resize" title="拖动缩放"></div>
@@ -184,10 +212,11 @@
           <button class="btn ghost small" data-app="uploaddir">上传文件夹</button>
           <button class="btn ghost small" data-app="newdir">新建</button>
           <button class="btn ghost small" data-app="refresh">刷新</button>
+          <input id="searchBox" class="searchbox" type="search" placeholder="筛选当前目录；回车全工作区搜索" />
           <span class="crumbs" id="breadcrumb"></span>
         </div>
         <table class="files">
-          <thead><tr><th>名称</th><th>类型</th><th>大小</th><th>修改时间</th><th class="actions">操作</th></tr></thead>
+          <thead><tr><th data-sort="name" title="点击排序">名称 ⇅</th><th>类型</th><th data-sort="size" title="点击排序">大小 ⇅</th><th data-sort="mtime" title="点击排序">修改时间 ⇅</th><th class="actions">操作</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -243,9 +272,151 @@
       <div class="resize" title="拖动缩放"></div>
     </div>
 
+    <!-- ============ 窗口：账户设置 ============ -->
+    <div class="window hidden" id="win-account">
+      <div class="window-title">
+        <div class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>账户设置</div>
+        <div class="controls"><button class="close" onclick="WindowManager.closeWindow('account')" aria-label="关闭窗口">✕</button></div>
+      </div>
+      <div class="window-body">
+        <div class="section-label">修改密码</div>
+        <div class="field"><label for="pwCurrent">当前密码</label><input id="pwCurrent" type="password" autocomplete="current-password" /></div>
+        <div class="field"><label for="pwNew">新密码（≥ 8 位）</label><input id="pwNew" type="password" autocomplete="new-password" /></div>
+        <div class="field"><label for="pwNew2">重复新密码</label><input id="pwNew2" type="password" autocomplete="new-password" /></div>
+        <div class="row-actions">
+          <button class="btn primary small" id="pwSaveBtn">修改密码</button>
+          <span class="hint">修改成功后，其他设备的登录会话将被吊销。</span>
+        </div>
+        <p class="msg hint" id="pwMsg"></p>
+
+        <div class="section-label gap-top">登录会话 / 设备</div>
+        <table class="admin" id="sessionRows">
+          <thead><tr><th>设备</th><th>IP</th><th>最后活跃</th><th>过期时间</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="row-actions gap-top-s">
+          <button class="btn ghost small" id="revokeOthersBtn">吊销其他会话</button>
+        </div>
+      </div>
+      <div class="resize" title="拖动缩放"></div>
+    </div>
+
+    <!-- ============ 窗口：运维监控（管理员） ============ -->
+    <div class="window hidden" id="win-ops">
+      <div class="window-title">
+        <div class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>运维监控</div>
+        <div class="controls"><button class="close" onclick="WindowManager.closeWindow('ops')" aria-label="关闭窗口">✕</button></div>
+      </div>
+      <div class="window-body">
+        <div class="section-label">运行中的 DSH 实例</div>
+        <table class="admin" id="opsInstances">
+          <thead><tr><th>用户</th><th>角色</th><th>状态</th><th>端口</th><th>运行时长</th><th>重启</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+
+        <div class="section-label gap-top">每用户磁盘占用</div>
+        <table class="admin" id="opsStorage">
+          <thead><tr><th>用户</th><th>DSH home</th><th>工作区</th><th>合计</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="row-actions gap-top-s">
+          <span class="hint" id="opsStorageMeta" style="flex:1"></span>
+          <button class="btn ghost small" id="opsStorageRefresh">重新统计</button>
+        </div>
+      </div>
+      <div class="resize" title="拖动缩放"></div>
+    </div>
+
+    <!-- ============ 窗口：插件市场管理（管理员） ============ -->
+    <div class="window hidden" id="win-market">
+      <div class="window-title">
+        <div class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 13h6"/></svg>插件市场管理</div>
+        <div class="controls"><button class="close" onclick="WindowManager.closeWindow('market')" aria-label="关闭窗口">✕</button></div>
+      </div>
+      <div class="window-body">
+        <div class="section-label">导入插件包（.tar.gz）</div>
+        <p class="hint">
+          内网离线模式：在有网机器上下载 GitHub 归档（仓库页 Code → Download，或
+          https://codeload.github.com/&lt;owner&gt;/&lt;repo&gt;/tar.gz/refs/heads/main），
+          再在此上传。支持 cordis 插件 / 技能（SKILL.md）/ agent 预设；install 脚本型不支持。
+        </p>
+        <div class="row-actions">
+          <input id="marketTgz" type="file" accept=".tgz,.tar.gz,application/gzip" />
+          <button class="btn primary small" id="marketImportBtn">导入</button>
+        </div>
+        <p class="msg hint" id="marketImportMsg"></p>
+
+        <div class="section-label gap-top">已收录条目</div>
+        <table class="admin" id="marketAdminRows">
+          <thead><tr><th>名称</th><th>类型</th><th>版本</th><th>安装数</th><th>导入时间</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="resize" title="拖动缩放"></div>
+    </div>
+
+    <!-- ============ 窗口：审计日志（管理员） ============ -->
+    <div class="window hidden" id="win-audit">
+      <div class="window-title">
+        <div class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-7-4-7 4z"/></svg>审计日志</div>
+        <div class="controls"><button class="close" onclick="WindowManager.closeWindow('audit')" aria-label="关闭窗口">✕</button></div>
+      </div>
+      <div class="window-body">
+        <div class="row-actions">
+          <input id="auditActor" placeholder="操作者用户名…" style="width:160px" />
+          <select id="auditAction">
+            <option value="">全部动作</option>
+            <option>register</option><option>login</option><option>logout</option>
+            <option>approve</option><option>disable</option><option>enable</option>
+            <option>password_change</option><option>password_reset</option><option>user_delete</option>
+            <option>session_revoke</option><option>settings_update</option>
+            <option>shared_config_set</option><option>shared_config_accept</option>
+            <option>instance_stop</option><option>market_import</option><option>market_delete</option>
+            <option>plugin_install</option><option>plugin_uninstall</option>
+          </select>
+          <button class="btn primary small" id="auditFilterBtn">筛选</button>
+          <span style="flex:1"></span>
+          <button class="btn ghost small" id="auditPrev">← 上一页</button>
+          <span class="hint" id="auditPageInfo"></span>
+          <button class="btn ghost small" id="auditNext">下一页 →</button>
+        </div>
+        <table class="admin" id="auditRows">
+          <thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>详情</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="resize" title="拖动缩放"></div>
+    </div>
+
+    <!-- ============ 窗口：系统设置（管理员） ============ -->
+    <div class="window hidden" id="win-settings">
+      <div class="window-title">
+        <div class="t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>系统设置</div>
+        <div class="controls"><button class="close" onclick="WindowManager.closeWindow('settings')" aria-label="关闭窗口">✕</button></div>
+      </div>
+      <div class="window-body">
+        <div class="section-label">注册</div>
+        <div class="field">
+          <label><input type="checkbox" id="setAllowRegister" /> 开放自助注册（关闭后仅管理员可管理用户）</label>
+        </div>
+        <div class="field">
+          <label for="setInviteCode">注册邀请码（留空 = 不要求邀请码）</label>
+          <input id="setInviteCode" placeholder="例如 team-2026" />
+        </div>
+        <div class="row-actions">
+          <button class="btn primary small" id="saveSettingsBtn">保存设置</button>
+        </div>
+        <p class="msg hint" id="settingsMsg"></p>
+      </div>
+      <div class="resize" title="拖动缩放"></div>
+    </div>
+
     <script src="/window-manager.js"></script>
     <script src="/shared-config-editor.js"></script>
     <script src="/file-explorer.js"></script>
+    <script src="/account.js"></script>
+    <script src="/market.js"></script>
+    <script src="/admin-extras.js"></script>
     <script>
       // ---------- 会话 ----------
       let user = null
@@ -302,14 +473,17 @@
         const st = inst === null ? 'stopped' : inst.status
         const crashed = st === 'crashed'
         const label = st === 'starting' ? '启动中…（等待 DSH 服务就绪）' : st === 'running' ? '运行中' : crashed ? '已崩溃' : '未运行'
+        const restartNote = inst !== null && inst.restarts > 0 ? `（本次连续自动重启 ×${inst.restarts}）` : ''
         const err = crashed && inst.lastError ? `（${inst.lastError.slice(0, 120)}）` : ''
         const stateEl = document.getElementById('dshState')
         const dot = st === 'running' ? 'on' : st === 'starting' ? 'starting' : 'off'
         stateEl.innerHTML = `<span class="dot ${dot}"></span> `
-        stateEl.appendChild(document.createTextNode(label + err))
+        stateEl.appendChild(document.createTextNode(label + restartNote + err))
         // 只要存在被跟踪的实例（即使已崩溃）就显示「停止」按钮，
         // 以便残留条目总能从界面上清除。
         document.getElementById('stopBtn').classList.toggle('hidden', inst === null)
+        // 运行中可重启；熔断（crashed）后也允许手动重启恢复。
+        document.getElementById('restartBtn').classList.toggle('hidden', inst === null || st === 'starting' || st === 'stopped')
         document.getElementById('openDshBtn').classList.toggle('hidden', !(st === 'running' && body.url))
         // noopener：被打开的 DSH 页面内容用户可控，不得保留对管理台
         // 标签页的 window.opener 引用（tabnabbing）。
@@ -358,6 +532,20 @@
         await refreshDsh()
       })
       document.getElementById('stopBtn').addEventListener('click', async () => { await api('/api/dsh/stop', { method: 'POST' }); await refreshDsh() })
+      // 重启：后端写 handoff 并重建实例（含崩溃后的熔断恢复）。
+      document.getElementById('restartBtn').addEventListener('click', async (event) => {
+        const btn = event.currentTarget
+        btn.disabled = true
+        const r = await api('/api/dsh/restart', { method: 'POST', body: JSON.stringify({ command: '' }) })
+        if (!r.ok) {
+          btn.disabled = false
+          alert('重启失败：' + (r.error === 'not_running' ? '实例已不在运行' : r.error))
+          await refreshDsh()
+          return
+        }
+        await refreshDsh()
+        pollDshWhileStarting()
+      })
 
       // 共享模型配置（管理员 → 选择接收的用户）
       let sharedDismissed = false
@@ -415,6 +603,18 @@
         panel.classList.toggle('hidden')
         if (!panel.classList.contains('hidden')) await loadPlugins()
       })
+      // 插件面板两个 Tab：本文件夹启用（原有勾选） ↔ 插件市场（安装/卸载）。
+      const { loadMarket } = initMarket({ api, esc, refreshDsh })
+      function setPluginTab(which) {
+        const enabled = which === 'enabled'
+        document.getElementById('pluginPaneEnabled').classList.toggle('hidden', !enabled)
+        document.getElementById('pluginPaneMarket').classList.toggle('hidden', enabled)
+        document.getElementById('pluginTabEnabled').className = 'btn small ' + (enabled ? 'primary' : 'ghost')
+        document.getElementById('pluginTabMarket').className = 'btn small ' + (enabled ? 'ghost' : 'primary')
+        if (!enabled) loadMarket()
+      }
+      document.getElementById('pluginTabEnabled').addEventListener('click', () => setPluginTab('enabled'))
+      document.getElementById('pluginTabMarket').addEventListener('click', () => setPluginTab('market'))
       document.getElementById('savePluginsBtn').addEventListener('click', async (event) => {
         const btn = event.currentTarget
         if (pluginFolder !== pathString()) {
@@ -431,6 +631,7 @@
       })
 
       // ---------- 管理台 ----------
+      const PW_ACTION_ERR = { cannot_delete_self: '不能删除自己', cannot_delete_admin: '不能删除管理员账号', not_found: '用户不存在' }
       async function loadUsers() {
         const tbody = document.querySelector('#adminUsers tbody')
         const r = await api('/api/admin/users')
@@ -440,17 +641,41 @@
         const badge = { admin: '管理员', pending: '待审核', active: '正常', disabled: '已禁用' }
         tbody.innerHTML = ''
         for (const u of users) {
-          const actions = u.role === 'pending'
-            ? `<button class="btn small ghost" data-act="approve" data-id="${esc(u.id)}">通过</button>`
-            : u.role === 'active' ? `<button class="btn small danger" data-act="disable" data-id="${esc(u.id)}">禁用</button>`
-            : u.role === 'disabled' ? `<button class="btn small ghost" data-act="enable" data-id="${esc(u.id)}">恢复</button>` : ''
+          let actions = ''
+          if (u.role === 'pending') actions += `<button class="btn small ghost" data-act="approve" data-id="${esc(u.id)}">通过</button>`
+          else if (u.role === 'active') actions += `<button class="btn small danger" data-act="disable" data-id="${esc(u.id)}">禁用</button>`
+          else if (u.role === 'disabled') actions += `<button class="btn small ghost" data-act="enable" data-id="${esc(u.id)}">恢复</button>`
+          else actions += '<span class="hint">—</span>'
+          if (u.role !== 'admin' && u.id !== user?.id) {
+            actions += `<button class="btn small ghost" data-act="resetpw" data-id="${esc(u.id)}" data-name="${esc(u.username)}">重置密码</button>`
+            actions += `<button class="btn small danger" data-act="delete" data-id="${esc(u.id)}" data-name="${esc(u.username)}">删除</button>`
+          }
           tbody.insertAdjacentHTML('beforeend', `<tr><td>${esc(u.username)}</td><td><span class="badge ${esc(u.role)}">${badge[u.role] || esc(u.role)}</span></td><td>${new Date(u.createdAt).toLocaleString()}</td><td>${actions}</td></tr>`)
         }
       }
       document.querySelector('#adminUsers tbody').addEventListener('click', async (event) => {
         const btn = event.target.closest('button[data-act]')
         if (!btn) return
-        const { act, id } = btn.dataset
+        const { act, id, name } = btn.dataset
+        if (act === 'resetpw') {
+          const newPassword = prompt(`为用户「${name}」设置新密码（≥ 8 位）：`)
+          if (newPassword === null) return
+          if (newPassword.length < 8) { alert('密码至少 8 位'); return }
+          const r = await api(`/api/admin/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ newPassword }) })
+          if (r.ok) alert('已重置；该用户的所有登录会话已被吊销')
+          else alert('重置失败：' + (PW_ACTION_ERR[r.error] || r.error))
+          return
+        }
+        if (act === 'delete') {
+          // 不可逆操作：要求输入用户名精确确认。
+          const confirmed = prompt(`删除用户「${name}」将同时删除其全部文件、DSH 环境与记录，不可恢复。\n输入用户名确认删除：`)
+          if (confirmed === null) return
+          if (confirmed !== name) { alert('用户名不匹配，已取消'); return }
+          const r = await api(`/api/admin/users/${id}/delete`, { method: 'POST' })
+          if (r.ok) { await loadUsers(); await loadOps?.() }
+          else alert('删除失败：' + (PW_ACTION_ERR[r.error] || r.error))
+          return
+        }
         const r = await api(`/api/admin/users/${id}/${act}`, { method: 'POST' })
         if (r.ok) await loadUsers()
         else alert('操作失败：' + r.error)
@@ -458,6 +683,17 @@
 
       // ---------- 共享配置（管理员） ----------
       const { loadShared } = initSharedConfigEditor(() => refreshSharedConfig())
+
+      // ---------- 账户设置（改密 + 会话管理） ----------
+      const { loadAccount } = initAccountPanel({ api, esc })
+      document.getElementById('accountBtn').addEventListener('click', () => loadAccount())
+
+      // ---------- 管理员扩展（运维 / 审计 / 设置 / 市场管理） ----------
+      const { loadOps, loadAudit, loadSettings, loadMarketAdmin } = initAdminExtras({ api, esc })
+      document.querySelectorAll('#opsIcon').forEach((el) => el.addEventListener('click', () => loadOps()))
+      document.querySelectorAll('#auditIcon').forEach((el) => el.addEventListener('click', () => loadAudit()))
+      document.querySelectorAll('#settingsIcon').forEach((el) => el.addEventListener('click', () => loadSettings()))
+      document.querySelectorAll('#marketIcon').forEach((el) => el.addEventListener('click', () => loadMarketAdmin()))
 
       // ---------- 时钟 ----------
       function tick() { document.getElementById('clock').textContent = new Date().toLocaleString('zh-CN', { hour12: false }) }
@@ -478,6 +714,10 @@
           document.getElementById('adminTask').classList.remove('hidden')
           document.getElementById('sharedIcon').classList.remove('hidden')
           document.getElementById('sharedTask').classList.remove('hidden')
+          document.getElementById('opsIcon').classList.remove('hidden')
+          document.getElementById('marketIcon').classList.remove('hidden')
+          document.getElementById('auditIcon').classList.remove('hidden')
+          document.getElementById('settingsIcon').classList.remove('hidden')
           await Promise.all([loadUsers(), loadShared()])
         }
         await explorer.syncAll()

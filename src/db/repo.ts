@@ -103,6 +103,37 @@ export function setUserRole(db: Database, id: string, role: UserRole, approvedBy
   return info.changes > 0
 }
 
+/** 覆盖用户密码哈希（改密/管理员重置共用）。 */
+export function updateUserPassword(db: Database, id: string, passHash: string): boolean {
+  const info = prepare(db, 'UPDATE users SET pass_hash = ? WHERE id = ?').run(passHash, id)
+  return info.changes > 0
+}
+
+/** 彻底删除用户行。sessions / workspaces（级联 folder_plugins）/
+ * shared_config_state / user_plugins 均带 ON DELETE CASCADE 随行消失；
+ * audit_log 有意保留（actor 是普通文本列，不留悬挂引用）。 */
+export function deleteUser(db: Database, id: string): boolean {
+  // approved_by 指向本用户的行先清引用，否则外键约束会让删除失败。
+  prepare(db, 'UPDATE users SET approved_by = NULL WHERE approved_by = ?').run(id)
+  const info = prepare(db, 'DELETE FROM users WHERE id = ?').run(id)
+  return info.changes > 0
+}
+
+/** 运行时应用设置（管理台可改、立即生效，如注册开关）。 */
+export function getSetting(db: Database, key: string): string | undefined {
+  const row = prepare(db, 'SELECT value FROM app_settings WHERE key = ?').get(key) as
+    | { value: string }
+    | undefined
+  return row?.value
+}
+
+export function setSetting(db: Database, key: string, value: string): void {
+  prepare(db, `
+    INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run(key, value, Date.now())
+}
+
 export interface CreateSessionInput {
   tokenHash: string
   userId: string
@@ -122,7 +153,97 @@ export function deleteSession(db: Database, tokenHash: string): void {
 }
 
 export function deleteUserSessions(db: Database, userId: string): void {
-  prepare(db,'DELETE FROM sessions WHERE user_id = ?').run(userId)
+  prepare(db, 'DELETE FROM sessions WHERE user_id = ?').run(userId)
+}
+
+/** 吊销用户除当前会话外的全部会话（改密后保持本人在线）。 */
+export function deleteUserSessionsExcept(db: Database, userId: string, keepTokenHash: string): void {
+  prepare(db, 'DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').run(userId, keepTokenHash)
+}
+
+/** 吊销指定会话；仅当它属于该用户时生效（防越权吊销他人会话）。 */
+export function deleteSessionForUser(db: Database, userId: string, tokenHash: string): boolean {
+  const info = prepare(db, 'DELETE FROM sessions WHERE token_hash = ? AND user_id = ?').run(tokenHash, userId)
+  return info.changes > 0
+}
+
+/** 会话的对外形态（`tokenHash` 兼作稳定 id —— 它是令牌的 SHA-256，
+ * 原始令牌从未存储，暴露哈希不构成泄露）。 */
+export interface SessionInfo {
+  id: string
+  createdAt: number
+  expiresAt: number
+  ip: string | null
+  userAgent: string | null
+  lastUsedAt: number
+}
+
+export function listUserSessions(db: Database, userId: string): SessionInfo[] {
+  const rows = prepare(db, `
+    SELECT token_hash, created_at, expires_at, ip, user_agent,
+           COALESCE(last_used_at, created_at) AS last_used_at
+    FROM sessions WHERE user_id = ? ORDER BY last_used_at DESC
+  `).all(userId) as Array<Record<string, unknown>>
+  return rows.map((row) => ({
+    id: row.token_hash as string,
+    createdAt: row.created_at as number,
+    expiresAt: row.expires_at as number,
+    ip: (row.ip as string | null) ?? null,
+    userAgent: (row.user_agent as string | null) ?? null,
+    lastUsedAt: row.last_used_at as number,
+  }))
+}
+
+/** 审计条目的对外形态（actor 联出用户名；已删用户为 null）。 */
+export interface AuditEntry {
+  id: number
+  ts: number
+  actor: string | null
+  actorName: string | null
+  action: string
+  detail: string | null
+}
+
+export interface AuditQuery {
+  limit: number
+  offset: number
+  actor?: string
+  action?: string
+}
+
+export function listAudit(db: Database, query: AuditQuery): { total: number; rows: AuditEntry[] } {
+  const conditions: string[] = []
+  const params: Array<string | number> = []
+  if (query.actor !== undefined && query.actor !== '') {
+    // 界面输入的是用户名；同时兼容直接给 actor id。
+    conditions.push('(a.actor = ? OR u.username = ?)')
+    params.push(query.actor, query.actor)
+  }
+  if (query.action !== undefined && query.action !== '') {
+    conditions.push('a.action = ?')
+    params.push(query.action)
+  }
+  const where = conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : ''
+  const total = prepare(
+    db,
+    `SELECT COUNT(*) AS n FROM audit_log a LEFT JOIN users u ON a.actor = u.id${where}`,
+  ).get(...params) as { n: number }
+  const rows = prepare(db, `
+    SELECT a.id, a.ts, a.actor, a.action, a.detail, u.username AS actor_name
+    FROM audit_log a LEFT JOIN users u ON a.actor = u.id${where}
+    ORDER BY a.ts DESC, a.id DESC LIMIT ? OFFSET ?
+  `).all(...params, query.limit, query.offset) as Array<Record<string, unknown>>
+  return {
+    total: total.n,
+    rows: rows.map((row) => ({
+      id: row.id as number,
+      ts: row.ts as number,
+      actor: (row.actor as string | null) ?? null,
+      actorName: (row.actor_name as string | null) ?? null,
+      action: row.action as string,
+      detail: (row.detail as string | null) ?? null,
+    })),
+  }
 }
 
 /** 清除过期会话（超过 TTL 的行不会再为任何人服务）。 */
@@ -212,6 +333,8 @@ export function getEnabledPluginIds(db: Database, workspaceId: string): string[]
 /** 会话与其用户的联表结果，供认证热路径使用（单次查询）。 */
 export interface SessionUser {
   expiresAt: number
+  /** 会话上次活跃时间（无记录时为创建时间），供节流回写 last_used_at。 */
+  lastUsedAt: number
   user: User
 }
 
@@ -220,12 +343,17 @@ export function findSessionWithUser(db: Database, tokenHash: string): SessionUse
   const row = prepare(
     db,
     `SELECT u.id, u.username, u.pass_hash, u.role, u.home_dir, u.created_at, u.approved_by,
-            s.expires_at
+            s.expires_at, COALESCE(s.last_used_at, s.created_at) AS last_used_at
      FROM sessions s JOIN users u ON s.user_id = u.id
      WHERE s.token_hash = ?`,
   ).get(tokenHash) as Record<string, unknown> | undefined
   if (row === undefined) return undefined
-  return { expiresAt: row.expires_at as number, user: toUser(row) }
+  return { expiresAt: row.expires_at as number, lastUsedAt: row.last_used_at as number, user: toUser(row) }
+}
+
+/** 回写会话活跃时间（调用方负责节流）。 */
+export function touchSession(db: Database, tokenHash: string): void {
+  prepare(db, 'UPDATE sessions SET last_used_at = ? WHERE token_hash = ?').run(Date.now(), tokenHash)
 }
 
 /** 单例的管理员维护共享配置行（payload 为原始 JSON）。 */
@@ -291,4 +419,174 @@ export function setSharedConfigState(
 export function countSharedConfigAcceptances(db: Database): number {
   const row = prepare(db, 'SELECT COUNT(*) AS n FROM shared_config_state').get() as { n: number }
   return row.n
+}
+
+// ---- 离线插件市场 ------------------------------------------------------------
+
+/** 市场条目行（`warnings` 为 JSON 字符串数组）。 */
+export interface MarketItemRow {
+  id: string
+  kind: 'cordis-plugin' | 'skill' | 'agent-preset'
+  name: string
+  version: string
+  description: string
+  dir: string
+  warnings: string
+  importedAt: number
+}
+
+const MARKET_COLS = 'id, kind, name, version, description, dir, warnings, imported_at'
+
+function toMarketItem(row: Record<string, unknown>): MarketItemRow {
+  return {
+    id: row.id as string,
+    kind: row.kind as MarketItemRow['kind'],
+    name: row.name as string,
+    version: row.version as string,
+    description: row.description as string,
+    dir: row.dir as string,
+    warnings: row.warnings as string,
+    importedAt: row.imported_at as number,
+  }
+}
+
+export function listMarketItems(db: Database): MarketItemRow[] {
+  const rows = prepare(
+    db,
+    `SELECT ${MARKET_COLS} FROM market_items ORDER BY kind ASC, name ASC, imported_at DESC`,
+  ).all() as Array<Record<string, unknown>>
+  return rows.map(toMarketItem)
+}
+
+export function findMarketItemById(db: Database, id: string): MarketItemRow | undefined {
+  const row = prepare(db, `SELECT ${MARKET_COLS} FROM market_items WHERE id = ?`).get(id) as
+    | Record<string, unknown>
+    | undefined
+  return row === undefined ? undefined : toMarketItem(row)
+}
+
+export function findMarketItemByKnv(
+  db: Database,
+  kind: string,
+  name: string,
+  version: string,
+): MarketItemRow | undefined {
+  const row = prepare(
+    db,
+    `SELECT ${MARKET_COLS} FROM market_items WHERE kind = ? AND name = ? AND version = ?`,
+  ).get(kind, name, version) as Record<string, unknown> | undefined
+  return row === undefined ? undefined : toMarketItem(row)
+}
+
+/** 同名条目里最近导入的一版（更新检测用）。 */
+export function latestMarketItemByName(db: Database, kind: string, name: string): MarketItemRow | undefined {
+  const row = prepare(
+    db,
+    `SELECT ${MARKET_COLS} FROM market_items WHERE kind = ? AND name = ? ORDER BY imported_at DESC LIMIT 1`,
+  ).get(kind, name) as Record<string, unknown> | undefined
+  return row === undefined ? undefined : toMarketItem(row)
+}
+
+export interface InsertMarketItemInput {
+  id: string
+  kind: MarketItemRow['kind']
+  name: string
+  version: string
+  description: string
+  dir: string
+  warnings: string
+}
+
+export function insertMarketItem(db: Database, input: InsertMarketItemInput): void {
+  prepare(db, `
+    INSERT INTO market_items (id, kind, name, version, description, dir, warnings, imported_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(input.id, input.kind, input.name, input.version, input.description, input.dir, input.warnings, Date.now())
+}
+
+/** 重新导入同 kind+name+version：指向新目录并刷新元数据。 */
+export function updateMarketItem(
+  db: Database,
+  id: string,
+  meta: { description: string; dir: string; warnings: string },
+): void {
+  prepare(db, 'UPDATE market_items SET description = ?, dir = ?, warnings = ?, imported_at = ? WHERE id = ?').run(
+    meta.description,
+    meta.dir,
+    meta.warnings,
+    Date.now(),
+    id,
+  )
+}
+
+export function deleteMarketItemRow(db: Database, id: string): boolean {
+  const info = prepare(db, 'DELETE FROM market_items WHERE id = ?').run(id)
+  return info.changes > 0
+}
+
+/** 某市场条目被多少用户安装着（管理台展示）。 */
+export function countMarketInstalls(db: Database, marketItemId: string): number {
+  const row = prepare(db, 'SELECT COUNT(*) AS n FROM user_plugins WHERE market_item_id = ?').get(marketItemId) as {
+    n: number
+  }
+  return row.n
+}
+
+/** 用户已安装的市场条目记录。 */
+export interface UserPluginRow {
+  marketItemId: string
+  kind: MarketItemRow['kind']
+  name: string
+  version: string
+  installedAt: number
+}
+
+export function listUserPlugins(db: Database, userId: string): UserPluginRow[] {
+  const rows = prepare(db, `
+    SELECT market_item_id, kind, name, version, installed_at
+    FROM user_plugins WHERE user_id = ? ORDER BY installed_at DESC
+  `).all(userId) as Array<Record<string, unknown>>
+  return rows.map((row) => ({
+    marketItemId: row.market_item_id as string,
+    kind: row.kind as UserPluginRow['kind'],
+    name: row.name as string,
+    version: row.version as string,
+    installedAt: row.installed_at as number,
+  }))
+}
+
+export function findUserPluginByName(db: Database, userId: string, name: string): UserPluginRow | undefined {
+  const row = prepare(db, `
+    SELECT market_item_id, kind, name, version, installed_at
+    FROM user_plugins WHERE user_id = ? AND name = ?
+  `).get(userId, name) as Record<string, unknown> | undefined
+  if (row === undefined) return undefined
+  return {
+    marketItemId: row.market_item_id as string,
+    kind: row.kind as UserPluginRow['kind'],
+    name: row.name as string,
+    version: row.version as string,
+    installedAt: row.installed_at as number,
+  }
+}
+
+export function upsertUserPlugin(
+  db: Database,
+  userId: string,
+  input: { marketItemId: string; kind: MarketItemRow['kind']; name: string; version: string },
+): void {
+  prepare(db, `
+    INSERT INTO user_plugins (user_id, market_item_id, kind, name, version, installed_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, name) DO UPDATE SET
+      market_item_id = excluded.market_item_id,
+      kind = excluded.kind,
+      version = excluded.version,
+      installed_at = excluded.installed_at
+  `).run(userId, input.marketItemId, input.kind, input.name, input.version, Date.now())
+}
+
+export function removeUserPlugin(db: Database, userId: string, name: string): boolean {
+  const info = prepare(db, 'DELETE FROM user_plugins WHERE user_id = ? AND name = ?').run(userId, name)
+  return info.changes > 0
 }
