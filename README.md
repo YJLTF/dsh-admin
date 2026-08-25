@@ -3,6 +3,8 @@
 面向局域网（Docker 部署）的多租户 DSH 托管平台 —— 部署到一台内网服务器后，多个用户注册并经管理员审核，各自获得一套**相互隔离**的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）环境，通过 `http://<内网IP>:<端口>` 访问。
 
 > 以 [DSH 插件市场](https://github.com/bradeGithub/DSH-Plugins-Marketplace) 的 cordis-plugin 形态分发，遵守 [STANDARD.md](STANDARD.md)。
+>
+> 内网无外网环境下，插件市场与插件管理所需的离线插件包可由 [dsh-plugin-offline-packager](https://github.com/YJLTF/dsh-plugin-offline-packager) 提供。
 
 ## 它解决什么
 
