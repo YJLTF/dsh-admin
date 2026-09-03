@@ -19,7 +19,7 @@ import type { ServerConfig } from '../config.js'
 import { uidForUser } from '../isolation.js'
 import { MAIN_PROFILE } from '../fs/plugins.js'
 import { userHomeDir, workspaceRoot } from '../fs/workspace.js'
-import { startForwarder } from './forwarder.js'
+import { startForwarder, probeIndex } from './forwarder.js'
 import { createPortGuard, type PortGuard } from './firewall.js'
 import { findFreePort, scrubEnv } from './spawn.js'
 
@@ -48,6 +48,11 @@ export interface Instance {
   /** 内网模式下转发器的访问令牌；随每次（重）拉起轮换。
    * 仅通过已认证的 API（launch/restart/status 返回的 url）交付给属主。 */
   token?: string
+  /** 子 DSH web 自己的浏览器认证 launchToken —— 从子进程 stdout 的
+   * `dsh web: …?token=…` 行捕获（dsh ≥0.1.2-alpha.5 的首页强制此门）。
+   * 打印晚于端口就绪，捕获是异步 best-effort；转发器用它把通过自身
+   * 令牌门的首导航交接给 DSH，换取浏览器侧的会话 cookie。 */
+  launchToken?: string
 }
 
 /** 管理台全局实例视图的单行快照。 */
@@ -166,6 +171,10 @@ export class Supervisor {
   private dshVersionCache: { value: string | null; at: number } | null = null
   /** 进行中的版本探测（并发去重：同时到达的多个请求共享一次探测）。 */
   private dshVersionProbe: Promise<string | null> | null = null
+  /** 首页认证门判定缓存（按实例对象弱引用，实例更替自然失效）。 */
+  private readonly indexGates = new WeakMap<Instance, boolean>()
+  /** 进行中的首页探测（WeakSet 去重，避免轮询期间叠加探测）。 */
+  private readonly indexProbing = new WeakSet<Instance>()
 
   constructor(private readonly config: ServerConfig) {
     this.portGuard = createPortGuard(config.portGuard)
@@ -243,6 +252,49 @@ export class Supervisor {
         })
     }
     return this.dshVersionProbe
+  }
+
+  /** 用户打开以访问运行中子 DSH 的 URL；'' = 暂不可达或尚未就绪。
+   * 内网模式：已发布端口 + 转发器令牌（首导航由转发器交接 DSH 自己
+   * 的 launchToken，见 forwarder.ts）。回环开发模式：直连子进程端口，
+   * 新版 dsh（≥0.1.2-alpha.5）的首页认证门需要它自己的 launchToken ——
+   * stdout 捕获就绪前返回 ''（桌面端持续快轮询直到就绪）；老版无门，
+   * 探测确认后直接可达。 */
+  async dshUrl(userId: string): Promise<string> {
+    const main = this.mains.get(userId)
+    if (main === undefined || main.port === undefined) return ''
+    if (this.config.publicHost !== '') {
+      const host = this.config.publicHost
+      return main.token === undefined
+        ? `http://${host}:${main.port}/`
+        : `http://${host}:${main.port}/?dsh_token=${main.token}`
+    }
+    const host = this.config.host
+    const loopback = host === '127.0.0.1' || host === 'localhost' || host === '::1'
+    if (!loopback) return ''
+    if (main.launchToken !== undefined) return `http://127.0.0.1:${main.port}/?token=${main.launchToken}`
+    return (await this.indexGated(main)) ? '' : `http://127.0.0.1:${main.port}/`
+  }
+
+  /** 子 DSH 首页是否处于 launchToken 认证门后；判定结果按实例缓存。
+   * 探测在后台进行 —— 状态轮询绝不被探测阻塞（connect 在个别环境
+   * 可能悬挂），未判定期间按"有门"处理（url 留空，下一次轮询用缓存）。
+   * 探测失败（尚未监听）不缓存，等下一轮再判。 */
+  private async indexGated(main: Instance): Promise<boolean> {
+    const cached = this.indexGates.get(main)
+    if (cached !== undefined) return cached
+    if (main.port === undefined) return true
+    if (!this.indexProbing.has(main)) {
+      this.indexProbing.add(main)
+      void probeIndex(main.port)
+        .then((state) => {
+          if (state !== 'down') this.indexGates.set(main, state === 'gated')
+        })
+        .finally(() => {
+          this.indexProbing.delete(main)
+        })
+    }
+    return true
   }
 
   /** 停止用户的两个进程（取消任何待处理的重启）。 */
@@ -347,16 +399,16 @@ export class Supervisor {
     const child = this.spawnAsUser(userId, command, [...args, ...launchArgs], { cwd: folder, env })
     this.trackChild(userId, instance, child)
     if (role === 'main' && instance.port !== undefined && instance.token !== undefined) {
-      this.syncForwarder(userId, instance.port, instance.token)
+      this.syncForwarder(userId, instance.port, instance.token, () => instance.launchToken)
     }
     return instance
   }
 
   /** 内网模式下，把用户已发布的端口（重新）指向子进程的环回监听
    * （HTTP/WS 反向代理；剥除 Origin + 注入 randomUUID 垫片 + 访问令牌
-   * 门禁 —— 见 forwarder.ts）。崩溃重启会换一个新端口，因此要替换任何
-   * 过期残留的转发器。 */
-  private syncForwarder(userId: string, port: number, token: string): void {
+   * 门禁 + DSH web 首页令牌交接 —— 见 forwarder.ts）。崩溃重启会换一个
+   * 新端口，因此要替换任何过期残留的转发器。 */
+  private syncForwarder(userId: string, port: number, token: string, launchToken: () => string | undefined): void {
     if (this.config.publicHost === '') return
     if (this.lanIp === null) this.lanIp = firstLanIpv4()
     if (this.lanIp === null) {
@@ -364,7 +416,7 @@ export class Supervisor {
       return
     }
     this.killForwarder(userId)
-    void startForwarder(this.lanIp, port, token)
+    void startForwarder(this.lanIp, port, token, launchToken)
       .then((server) => this.forwarders.set(userId, server))
       .catch((err: unknown) => {
         // 转发器失败绝不能拖垮子进程；直连链接随之失效。
@@ -423,7 +475,21 @@ export class Supervisor {
         instance.status = 'running'
       }
     })
-    child.stdout?.pipe(process.stdout)
+    // 子进程 stdout 透传到编排器输出，同时扫描 `dsh web: …?token=…`
+    // 行捕获 web 首页认证的 launchToken（行可能跨 chunk 到达，需按
+    // 累积缓冲匹配；找到即停，缓冲封顶防止老版本 dsh 不打印时无界增长）。
+    let scan = ''
+    child.stdout?.on('data', (chunk: Buffer) => {
+      const text = chunk.toString()
+      process.stdout.write(text)
+      if (instance.launchToken !== undefined) return
+      scan = (scan + text).slice(-8192)
+      const match = scan.match(/dsh web: \S*\/\?token=([A-Za-z0-9_-]{20,})/)
+      if (match !== null) {
+        instance.launchToken = match[1]
+        scan = ''
+      }
+    })
     let stderrTail = ''
     child.stderr?.on('data', (chunk: Buffer) => {
       stderrTail = (stderrTail + chunk.toString()).slice(-2048)

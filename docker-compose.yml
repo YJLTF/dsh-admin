@@ -25,7 +25,7 @@ services:
       - "3080:3080" # 编排器 Web UI + API
       - "40000-40100:40000-40100" # 每用户子 DSH 端口
     environment:
-      DSH_ADMIN_PUBLIC_HOST: 192.168.31.50 # <- 你的局域网 IP
+      DSH_ADMIN_PUBLIC_HOST: 192.168.0.131 # <- 你的局域网 IP
       DSH_ADMIN_DSH_PORT_MIN: "40000"
       DSH_ADMIN_DSH_PORT_MAX: "40100"
       # DSH_ADMIN_DSH_BIN: "" # 无需设置；默认从 PATH（/opt/dsh）解析 dsh

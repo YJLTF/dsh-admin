@@ -11,7 +11,7 @@
 ```
 
 - **编排服务端口**：编排服务自己的登录 / 管理台 / 桌面 / API。
-- **每用户子端口**：DSH CLI 拒绝绑定 `0.0.0.0`，子 DSH 只绑回环端口；编排服务为每个运行中的实例在容器 eth0 上起一个内置 HTTP/WS forwarder（剥 Origin、注入 `crypto.randomUUID` polyfill、改写 loopback 门——见 [deployment-docker.md](deployment-docker.md)），端口固定在 `DSH_PORT_MIN/MAX` 段内供 Docker 映射。
+- **每用户子端口**：DSH CLI 拒绝绑定 `0.0.0.0`，子 DSH 只绑回环端口；编排服务为每个运行中的实例在容器 eth0 上起一个内置 HTTP/WS forwarder（剥 Origin、注入 `crypto.randomUUID` polyfill、改写 loopback 门、交接 dsh ≥0.1.2-alpha.5 web 首页的 launchToken 认证门——见 [deployment-docker.md](deployment-docker.md)），端口固定在 `DSH_PORT_MIN/MAX` 段内供 Docker 映射。
 - 编排服务是独立 Node 进程，`child_process.spawn('dsh --profile web --host 127.0.0.1 --port <段内端口>', ...)` 拉起每用户 DSH（主 + 按需守护）。
 
 ## 2. 打包与启动

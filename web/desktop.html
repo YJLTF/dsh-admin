@@ -580,9 +580,16 @@
       async function refreshDsh() {
         const r = await api('/api/dsh/status')
         if (!r.ok) return
-        if (renderDshState(r.body) === 'starting') pollDshWhileStarting()
+        if (openPending(r.body)) pollDshWhileStarting()
       }
-      // starting 期间 1s 快轮询（后台 5s 轮询太慢），状态离开 starting 即停。
+      // starting 期间 1s 快轮询（后台 5s 轮询太慢）；running 但打开链接
+      // 尚未就绪（回环模式等子 DSH 打印它的首页令牌）也保持快轮询，
+      // 状态与链接齐备即停。
+      function openPending(body) {
+        const inst = body.instance
+        if (inst === null) return false
+        return inst.status === 'starting' || (inst.status === 'running' && !body.url)
+      }
       let dshStartingPoll = false
       function pollDshWhileStarting() {
         if (dshStartingPoll) return
@@ -593,7 +600,8 @@
               await new Promise((resolve) => setTimeout(resolve, 1000))
               const r = await api('/api/dsh/status')
               if (!r.ok) continue
-              if (renderDshState(r.body) !== 'starting') return
+              renderDshState(r.body)
+              if (!openPending(r.body)) return
             }
           } finally {
             dshStartingPoll = false

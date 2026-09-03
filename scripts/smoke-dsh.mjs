@@ -52,19 +52,23 @@ try {
 
   r = await json('/api/dsh/launch', { method: 'POST', cookie, body: { folder: 'proj' } })
   console.log('启动    ->', r.status, r.body)
-  assert(r.status === 200 && r.body.url, '启动成功')
-  const url = r.body.url
-  // dev 服务绑定回环端口 → url 必须是子进程自己的端口。
-  assert(url === `http://127.0.0.1:${r.body.instance.port}/`, 'dev url 是子进程的回环端口')
-
-  // 子进程异步绑定端口，编排器在端口探测通过后才置 running —— 轮询。
+  assert(r.status === 200 && typeof r.body.url === 'string', '启动成功')
+  const childPort = r.body.instance.port
+  // 回环模式：url 需等子 DSH 打印它的首页认证令牌（fake-dsh 延迟 500ms
+  // 才打印）才就绪 —— 轮询直到 running 且 url 携带 ?token=。
   for (let i = 0; i < 100; i++) {
     r = await json('/api/dsh/status', { cookie })
-    if (r.body.running === true) break
+    if (r.body.running === true && r.body.url !== '') break
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
   console.log('状态    ->', r.status, r.body)
   assert(r.body.running === true, '启动后处于运行状态（端口就绪后）')
+  const url = r.body.url
+  // dev 服务绑定回环端口 → url 直连子进程端口并携带 DSH 自己的首页令牌。
+  assert(
+    url.startsWith(`http://127.0.0.1:${childPort}/?token=`),
+    'dev url 是子进程端口且携带 DSH 首页令牌',
+  )
 
   // 子进程异步绑定端口；轮询直到它响应。
   let childText
@@ -144,6 +148,45 @@ try {
       if (lanIp !== undefined) {
         const fwdBase = `http://${lanIp}:${body2.instance.port}`
         console.log('经转发器 ->', fwdBase)
+        // DSH web 首页令牌交接（dsh ≥0.1.2-alpha.5 的浏览器认证门）：
+        // 携带 dsh_token 的首导航被转发器改写为携带子 DSH 的
+        // launchToken → DSH 以 303 种下自己的会话 cookie。fake-dsh 在
+        // 监听后 500ms 才打印令牌，竞态窗口内转发器返回自动重试页。
+        {
+          let exchange = null
+          let sawRetry = false
+          for (let i = 0; i < 60; i++) {
+            const res = await fetch(fwdBase + `/?dsh_token=${fwdToken}`, { redirect: 'manual' }).catch(() => null)
+            if (res !== null && res.status === 303) {
+              exchange = res
+              break
+            }
+            if (res !== null && res.status === 503) {
+              sawRetry = true
+              const html = await res.text()
+              assert(html.includes('http-equiv="refresh"'), '竞态窗口返回自动重试页')
+            }
+            await new Promise((resolve) => setTimeout(resolve, 200))
+          }
+          console.log('令牌交接 ->', exchange === null ? '失败' : `${exchange.status}（重试页${sawRetry ? '已出现' : '未触发'}）`)
+          assert(sawRetry, '令牌就绪前首导航拿到自动重试页而非 401')
+          assert(exchange !== null, '首导航被交接为 DSH 的 token 交换（303）')
+          assert(exchange.headers.get('location') === '/', 'token 交换重定向到干净根路径')
+          const setCookies = exchange.headers.getSetCookie()
+          assert(setCookies.some((c) => c.startsWith('dsh-auth-')), 'token 交换种下 DSH 会话 cookie')
+          assert(setCookies.some((c) => c.startsWith('dshfwd=')), '同一响应种下转发器访问 cookie')
+          // 双 cookie 访问干净根路径 → DSH 放行首页。
+          const cookiePair = setCookies.map((c) => c.split(';')[0]).join('; ')
+          const home = await fetch(fwdBase + '/', { headers: { cookie: cookiePair } }).catch(() => null)
+          assert(home !== null && home.status === 200, '交接后的 cookie 可访问 DSH 首页')
+          const homeText = home === null ? '' : await home.text()
+          assert(homeText.includes('authenticated'), 'DSH 首页内容正常返回')
+          // 只有转发器 cookie、没有 DSH 会话 cookie 的首页仍被 401 ——
+          // 门在子 DSH 侧，转发器不替它放行。
+          const fwdOnly = (setCookies.find((c) => c.startsWith('dshfwd=')) ?? '').split(';')[0]
+          const bareHome = await fetch(fwdBase + '/', { headers: { cookie: fwdOnly } }).catch(() => null)
+          assert(bareHome !== null && bareHome.status === 401, '无 DSH 会话 cookie 的首页仍被 401')
+        }
         // 转发器在启动后异步绑定；稍等片刻。
         await new Promise((resolve) => setTimeout(resolve, 500))
         // 无令牌的请求必须被拒绝（内网直连不能绕过登录）。
@@ -169,6 +212,16 @@ try {
         assert(gate !== null && gate.status === 200, '转发器转发插件脚本')
         const gateJs = gate === null ? '' : await gate.text()
         assert(gateJs.includes('(true) ? "host"'), '转发器把回环门改写为 true')
+        // 组合端点（dsh ≥0.1.2-alpha.5）：整批脚本 /plugins/??<id>/client.js,…
+        // 环回门内嵌合并体，同样必须被改写。
+        const combo = await fetch(
+          fwdBase + `/plugins/??@deepseek-ai/dsh-client-ui-settings/client.js,@deepseek-ai/dsh-client-connection/client.js&rev=abc&dsh_token=${fwdToken}`,
+          { headers: { origin: fwdBase } },
+        ).catch(() => null)
+        assert(combo !== null && combo.status === 200, '转发器转发组合端点脚本')
+        const comboJs = combo === null ? '' : await combo.text()
+        assert(comboJs.includes('other-plugin'), '组合端点返回合并体')
+        assert(comboJs.includes('(true) ? "host"'), '组合端点的回环门同样被改写为 true')
         const probe = await fetch(fwdBase + `/hello?dsh_token=${fwdToken}`, { headers: { origin: fwdBase } }).catch(() => null)
         assert(probe !== null && probe.status === 200, '转发器原样转发非 HTML 响应')
       }

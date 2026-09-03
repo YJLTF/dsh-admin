@@ -51,6 +51,16 @@
 - **关键机制**（读 harness 源码确认）：harness 的 web 服务端口读 **`--port` 这个 CLI flag**（`web-startup` 插件解析 → `webStartup` 服务 → webserver），**不是** env、**不是** patch。`--cwd` 也不是合法 flag。
 - **修法**：spawn 子 DSH 用 `dsh --profile web --host 127.0.0.1 --port <随机端口>`（已内置）。
 
+## 打开 DSH 显示 "dsh web authentication required; reopen the URL printed by dsh web."
+
+- **现象**：桌面点「打开 DSH」，页面显示这条英文 401 文本（dsh CLI ≥0.1.2-alpha.5）。
+- **根因**：新版 dsh 的 web 首页自带浏览器认证门（`dsh-client-connection` 的 `authorizeIndex`）——只有携带该进程 launchToken（`dsh web` 启动时打印在 stdout 的 URL 里 `?token=…`）的首导航能换来 DSH 的会话 cookie，否则一律 401。
+- **现状**：已内置适配——
+  - **内网模式**：编排服务从子进程 stdout 捕获 launchToken，forwarder 把携带 `?dsh_token=` 的首导航改写为携带它，DSH 直接向浏览器种下会话 cookie（303 到干净 `/`）。令牌打印前点开会看到自动重试页（"DSH 正在启动"），就绪后自动进入。
+  - **回环 dev 模式**：status 返回的 url 等令牌捕获后自动带上 `?token=`，桌面「打开 DSH」按钮就绪后才出现。
+  - **老版 dsh（无此门）**：forwarder/状态层探测首页非 401 时原样直连，行为不变。
+- **手动应急**：在编排服务日志里找该实例打印的 `dsh web: http://127.0.0.1:<端口>/?token=<令牌>`，把它接到内网链接上开一次：`http://<内网IP>:<端口>/?dsh_token=<实例令牌>&token=<令牌>`。每次重启令牌都会换。
+
 ## 404：打开 DSH 后静态资源全 404
 
 - **现象**：HTML 能加载，但 `/assets/*`、`/favicon.svg`、`/manifest.webmanifest` 全 404。
@@ -62,6 +72,13 @@
 - **现象**：DSH 页面能加载，但功能 API（`/api/settings.describe`、`/api/host.describe` 等）返回 403，前端报 "transport failure for /api/xxx: HTTP 403"。
 - **根因**：harness 的 `/api` 浏览器信任栅栏（`api-request-trust.ts`）检查 Origin——`origin.host` 必须等于 `host.host`。内网页面 origin 是 `http://<内网IP>:3080` 而子 DSH 监听回环 → 不匹配 → 403。
 - **修法**：代理到 DSH 时剥掉 `origin` / `referer` / `sec-fetch-*` / `x-forwarded-*`，只保留 loopback `host`（已内置在 [forwarder.ts](../src/supervisor/forwarder.ts) 的 `STRIP_HEADERS`）。
+
+## 设置页「加载提供方目录失败: settings are unavailable in this browser」
+
+- **现象**：DSH 能打开，但设置 → 模型（或通用设置）报这条错误。
+- **根因**：DSH 把设置 RPC 限制在"页面源为环回"的浏览器里（连接脚本里的 `isLoopbackHostname(pageLocation.hostname)` 门）。经内网 IP 访问时页面源不是环回，门判 false → 设置文档存储不创建 → 提供方目录拿不到。
+- **修法**：forwarder 把连接脚本里的这个门改写为 `true`（转发器本身就是环回路径，网络不变量成立）。dsh ≥0.1.2-alpha.5 起该脚本改经 `/plugins/??<id>/client.js,…` 组合端点整批加载，改写已同时覆盖单文件与组合路径。
+- **注意**：脚本 URL 带 `rev` 缓存参数，浏览器可能缓存旧的未改写副本——部署新版后强刷一次（Ctrl+Shift+R）即可。
 
 ## 编排服务日志在哪
 

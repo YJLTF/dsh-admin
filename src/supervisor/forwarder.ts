@@ -12,6 +12,13 @@
  * 一个随机令牌 —— 没有它（首次导航携带 `?dsh_token=`，之后是
  * `dshfwd` cookie，WS 升级同样校验）的请求一律 401。这把"谁能用
  * 这个 DSH"重新关回 dsh-admin 的登录/授权门后。
+ *
+ * DSH web 首页令牌交接：dsh ≥0.1.2-alpha.5 的 web 首页自带一层浏览器
+ * 认证门 —— 只有携带该进程 launchToken（`dsh web` 启动时打印在 URL 里）
+ * 的首导航才能换来 DSH 自己的会话 cookie，否则一律 401。转发器把通过
+ * 自身 `dsh_token` 门的首导航（根路径）改写为携带捕获到的 launchToken，
+ * 让 DSH 直接向浏览器种下 cookie；令牌尚未打印时不挂起请求，返回自动
+ * 重试页，直到捕获完成或探测确认子 DSH 无此门（旧版本原样放行）。
  * @module dsh-admin/supervisor/forwarder
  */
 
@@ -57,18 +64,38 @@ const SHIM =
 /**
  * DSH 把它的设置功能限制在页面源为环回的情况（"设置 RPC 仅限环回"）：
  * `isLoopbackHostname(pageLocation.hostname)`。浏览器保证
- * `location.hostname` 不可伪造，因此这个门被改写在连接插件的脚本里。
+ * `location.hostname` 不可伪造，因此这个门被改写在连接插件的脚本里
+ * （≥0.1.2-alpha.5 该脚本经 `/plugins/??…` 组合端点整批加载，见
+ * isConnectionClient）。
  * 转发器本身就是环回路径（浏览器 → 转发器 → 127.0.0.1 上的子进程），
  * 所以该门的网络不变量仍然成立；只有页面源检查会错误地为局域网 IP
  * 访客禁用设置。
  */
 const LOOPBACK_GATE_RE = /isLoopbackHostname\(pageLocation\.hostname\)/g
 
-/** 客户端代码携带环回门的那个插件的路径前缀。 */
+/** 客户端代码携带环回门的那个插件（单文件回退路径的前缀）。 */
 const CONNECTION_PLUGIN_PREFIX = '/plugins/@deepseek-ai/dsh-client-connection/'
+/**
+ * 令牌交接未就绪时的自动重试页：子 DSH 尚未监听，或监听了但
+ * launchToken 还没打印（真实 dsh 在插件加载完成后才打印）。meta
+ * refresh 重载当前 URL（仍带 `?dsh_token=`），重新走一遍交接。
+ */
+const RETRY_PAGE =
+  '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="2">' +
+  '<title>dsh-admin</title></head><body style="font-family:system-ui,sans-serif;background:#111;' +
+  'color:#eee;display:grid;place-items:center;height:100vh;margin:0">' +
+  '<p>DSH 正在启动，请稍候…（页面自动刷新 / starting&hellip;）</p></body></html>'
+
+/** dsh ≥0.1.2-alpha.5 的组合端点：整批客户端脚本走
+ * `/plugins/??<id>/client.js,<id2>/client.js&rev=…`（可按 URL 上限分块）。
+ * 环回门代码随 connection 插件内嵌其中，路径不再以其开头；无门代码的
+ * 全局替换是 no-op，因此组合响应一律按需改写。 */
+const COMBINED_PLUGINS_PREFIX = '/plugins/??'
 
 function isConnectionClient(url: string | undefined): boolean {
-  const path = (url ?? '').split('?')[0]
+  const raw = url ?? ''
+  if (raw.startsWith(COMBINED_PLUGINS_PREFIX)) return true
+  const path = raw.split('?')[0]
   return path.startsWith(CONNECTION_PLUGIN_PREFIX) && path.endsWith('.js')
 }
 
@@ -105,11 +132,14 @@ function tokenEquals(a: string, b: string): boolean {
   return timingSafeEqual(ha, hb)
 }
 
-/** 从请求 URL 的查询串中提取 `dsh_token`（base64url 值不含 '='，无需解码）。 */
+/** 从请求 URL 的查询串中提取 `dsh_token`（base64url 值不含 '='，无需解码）。
+ * 注意取"第一个 ? 之后"的整个串而不是 split('?')[1]：组合端点路径里的
+ * `??`（/plugins/??a/b.js,…）会把后者切成空串。 */
 function queryToken(url: string | undefined): string | undefined {
-  const query = (url ?? '').split('?')[1]
-  if (query === undefined) return undefined
-  for (const pair of query.split('&')) {
+  if (url === undefined) return undefined
+  const qi = url.indexOf('?')
+  if (qi === -1) return undefined
+  for (const pair of url.slice(qi + 1).split('&')) {
     const eq = pair.indexOf('=')
     if (eq !== -1 && pair.slice(0, eq) === TOKEN_QUERY) return pair.slice(eq + 1)
   }
@@ -126,6 +156,48 @@ function stripTokenParam(url: string): string {
     .filter((pair) => pair.split('=')[0] !== TOKEN_QUERY)
     .join('&')
   return kept === '' ? url.slice(0, qi) : `${url.slice(0, qi + 1)}${kept}`
+}
+
+/** 把已剥除 `dsh_token` 的根路径请求改写为携带 DSH 的 launchToken。
+ * 先清掉请求里已有的 `token` 参数（例如用户手动拼的旧令牌）再追加，
+ * 保证 DSH 的 authorizeIndex 只见到一个 token。 */
+function rootPathWithLaunchToken(stripped: string, launchToken: string): string {
+  const qi = stripped.indexOf('?')
+  const kept = (qi === -1 ? [] : stripped.slice(qi + 1).split('&')).filter(
+    (pair) => pair !== '' && pair.split('=')[0] !== 'token',
+  )
+  kept.push(`token=${launchToken}`)
+  return `/?${kept.join('&')}`
+}
+
+/** 子 DSH 首页状态的探测结论：`gated` = 处于 launchToken 门后（401），
+ * `open` = 无门（旧版 dsh，可直接放行），`down` = 尚未监听。 */
+type IndexState = 'gated' | 'open' | 'down'
+
+/** 单次连接探测的硬上限：connect 在个别环境（防火墙/半开端口）可能
+ * 悬挂数十秒，绝不能让它拖住状态轮询或首导航。 */
+const PROBE_TIMEOUT_MS = 2_000
+
+/** 向子 DSH 的首页发一次无凭据探测，判定它是否在 launchToken 门后。 */
+export function probeIndex(port: number): Promise<IndexState> {
+  return new Promise((resolve) => {
+    let settled = false
+    const done = (state: IndexState): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(state)
+    }
+    const timer = setTimeout(() => {
+      req.destroy()
+      done('down')
+    }, PROBE_TIMEOUT_MS)
+    const req = httpRequest({ host: '127.0.0.1', port, path: '/', method: 'GET', agent }, (res) => {
+      res.resume()
+      done((res.statusCode ?? 200) === 401 ? 'gated' : 'open')
+    })
+    req.on('error', () => done('down'))
+  })
 }
 
 interface TokenCheck {
@@ -193,8 +265,15 @@ function relayUpgrade(req: import('node:http').IncomingMessage, socket: import('
 /**
  * 为一个子 DSH 启动转发器。监听绑定完成后 resolve。
  * 所有请求（HTTP 与 WS 升级）必须携带 `token` —— 查询参数或 cookie。
+ * `launchToken` 返回子 DSH web 的首页认证令牌（异步捕获，未就绪时为
+ * undefined）；首导航据此完成与 DSH 的令牌交接。
  */
-export function startForwarder(lanIp: string, port: number, token: string): Promise<HttpServer> {
+export function startForwarder(
+  lanIp: string,
+  port: number,
+  token: string,
+  launchToken: () => string | undefined = () => undefined,
+): Promise<HttpServer> {
   const server = createServer((req, res) => {
     const check = checkToken(req, token)
     if (!check.ok) {
@@ -204,49 +283,82 @@ export function startForwarder(lanIp: string, port: number, token: string): Prom
     }
     // 首次导航（令牌在查询串中）：种 cookie 供后续请求与 WS 升级使用，
     // 并把令牌从代理路径中剥除（不外泄给上游 DSH）。
-    const extraHeaders = check.viaQuery ? { 'set-cookie': tokenCookie(token) } : {}
+    const extraCookie = check.viaQuery ? tokenCookie(token) : undefined
     const path = stripTokenParam(req.url ?? '/')
-    const upstream = httpRequest(
-      {
-        host: '127.0.0.1',
-        port,
-        path,
-        method: req.method,
-        agent,
-        headers: buildUpstreamHeaders(req.headers, port),
-      },
-      (upRes) => {
-        const headers = { ...upRes.headers, ...extraHeaders }
-        const contentType = String(headers['content-type'] ?? '')
-        const isHtml = contentType.includes('text/html')
-        const rewriteJs = contentType.includes('javascript') && isConnectionClient(req.url)
-        const noBody = (upRes.statusCode ?? 200) === 204 || (upRes.statusCode ?? 200) === 304
-        if ((isHtml || rewriteJs) && !noBody) {
-          delete headers['content-length'] // 响应体会在下方被改写
-          const chunks: Buffer[] = []
-          upRes.on('data', (c: Buffer) => chunks.push(c))
-          upRes.on('error', () => res.destroy()) // 传输中途上游失败
-          upRes.on('end', () => {
-            const body = Buffer.concat(chunks).toString('utf-8')
-            const out = isHtml ? injectScript(body, SHIM) : patchConnectionClient(body)
-            res.writeHead(upRes.statusCode ?? 502, headers)
-            res.end(out)
+    const forward = (upstreamPath: string): void => {
+      const upstream = httpRequest(
+        {
+          host: '127.0.0.1',
+          port,
+          path: upstreamPath,
+          method: req.method,
+          agent,
+          headers: buildUpstreamHeaders(req.headers, port),
+        },
+        (upRes) => {
+          // 合并而不是覆盖 set-cookie：令牌交接的 303 同时携带 DSH 的
+          // 会话 cookie，不能被转发器自己的 dshfwd 挤掉。
+          const headers = { ...upRes.headers } as Record<string, string | string[]>
+          if (extraCookie !== undefined) {
+            const upstreamCookies = upRes.headers['set-cookie']
+            headers['set-cookie'] = upstreamCookies === undefined ? extraCookie : [...upstreamCookies, extraCookie]
+          }
+          const contentType = String(headers['content-type'] ?? '')
+          const isHtml = contentType.includes('text/html')
+          const rewriteJs = contentType.includes('javascript') && isConnectionClient(req.url)
+          const noBody = (upRes.statusCode ?? 200) === 204 || (upRes.statusCode ?? 200) === 304
+          if ((isHtml || rewriteJs) && !noBody) {
+            delete headers['content-length'] // 响应体会在下方被改写
+            const chunks: Buffer[] = []
+            upRes.on('data', (c: Buffer) => chunks.push(c))
+            upRes.on('error', () => res.destroy()) // 传输中途上游失败
+            upRes.on('end', () => {
+              const body = Buffer.concat(chunks).toString('utf-8')
+              const out = isHtml ? injectScript(body, SHIM) : patchConnectionClient(body)
+              res.writeHead(upRes.statusCode ?? 502, headers)
+              res.end(out)
+            })
+            return
+          }
+          res.writeHead(upRes.statusCode ?? 502, headers)
+          upRes.pipe(res)
+        },
+      )
+      upstream.on('error', () => res.destroy())
+      // 客户端中途断开（响应未写完就 close）：销毁上游请求，
+      // 避免向已销毁的响应继续写入以及连接空转；响应自身的
+      // 流错误（如 DESTROY 后写入）也不允许冒泡成未处理异常。
+      res.on('error', () => upstream.destroy())
+      res.on('close', () => {
+        if (!res.writableEnded) upstream.destroy()
+      })
+      req.pipe(upstream)
+    }
+    // 通过自身令牌门的首导航根路径 = DSH web 首页令牌交接点：携带
+    // launchToken 转发，让 DSH 以 303 向浏览器种下会话 cookie。令牌
+    // 尚未打印时不挂起请求 —— 探测一次首页：有门（或子进程还没监听）
+    // 就返回自动重试页，等浏览器刷新时再试；无门（旧版 dsh）原样放行。
+    if (check.viaQuery && path.split('?')[0] === '/') {
+      const found = launchToken()
+      if (found !== undefined) {
+        forward(rootPathWithLaunchToken(path, found))
+        return
+      }
+      void probeIndex(port).then((state) => {
+        if (res.destroyed) return
+        if (state === 'open') forward(path)
+        else {
+          res.writeHead(503, {
+            'content-type': 'text/html; charset=utf-8',
+            'cache-control': 'no-store',
+            ...(extraCookie !== undefined ? { 'set-cookie': extraCookie } : {}),
           })
-          return
+          res.end(RETRY_PAGE)
         }
-        res.writeHead(upRes.statusCode ?? 502, headers)
-        upRes.pipe(res)
-      },
-    )
-    upstream.on('error', () => res.destroy())
-    // 客户端中途断开（响应未写完就 close）：销毁上游请求，
-    // 避免向已销毁的响应继续写入以及连接空转；响应自身的
-    // 流错误（如 DESTROY 后写入）也不允许冒泡成未处理异常。
-    res.on('error', () => upstream.destroy())
-    res.on('close', () => {
-      if (!res.writableEnded) upstream.destroy()
-    })
-    req.pipe(upstream)
+      })
+      return
+    }
+    forward(path)
   })
   server.on('upgrade', (req, socket, head) => relayUpgrade(req, socket, head, port, token))
   return new Promise((resolve, reject) => {

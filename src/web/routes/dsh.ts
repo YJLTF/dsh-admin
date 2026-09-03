@@ -38,22 +38,6 @@ function alive(status: string | undefined): boolean {
   return status === 'running'
 }
 
-/** 用户打开以访问运行中子 DSH 的 URL，不可达时为 ''。内网模式的
- * 直连链接携带一次性导航令牌（转发器据此种下 cookie 后续校验）。 */
-function dshUrl(config: { host: string; publicHost: string }, port: number | undefined, token?: string): string {
-  // 内网模式：服务器通过已发布的主机名/IP 访问，因此直接链接子 DSH
-  // 自己的已发布端口（每主实例的转发器把容器的 eth0 桥接到子进程的
-  // 环回监听；无令牌的请求会被转发器以 401 拒绝）。
-  if (config.publicHost !== '' && port !== undefined) {
-    return token === undefined ? `http://${config.publicHost}:${port}/` : `http://${config.publicHost}:${port}/?dsh_token=${token}`
-  }
-  // 绑定环回的开发服务器：子进程自己的环回端口在同一台机器上可达
-  // （无需转发器；页面源就是环回）。
-  const loopback = config.host === '127.0.0.1' || config.host === 'localhost' || config.host === '::1'
-  if (loopback && port !== undefined) return `http://127.0.0.1:${port}/`
-  return ''
-}
-
 export const dshRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/dsh/launch', { preHandler: requireAuth, schema: launchSchema }, async (request, reply) => {
     const { folder } = request.body as { folder: string }
@@ -86,7 +70,7 @@ export const dshRoutes: FastifyPluginAsync = async (app) => {
       const instance = await app.supervisor.launch(user.id, p.abs, patchPath)
       return {
         instance: { id: instance.id, port: instance.port, status: instance.status },
-        url: dshUrl(app.config, instance.port, instance.token),
+        url: await app.supervisor.dshUrl(user.id),
       }
     } catch (err) {
       if (err instanceof AlreadyRunningError) return reply.code(409).send({ error: 'already_running' })
@@ -112,7 +96,7 @@ export const dshRoutes: FastifyPluginAsync = async (app) => {
     await app.supervisor.spawnWatchdog(user.id)
     return {
       instance: { id: instance.id, port: instance.port, status: instance.status },
-      url: dshUrl(app.config, instance.port, instance.token),
+      url: await app.supervisor.dshUrl(user.id),
     }
   })
 
@@ -137,7 +121,7 @@ export const dshRoutes: FastifyPluginAsync = async (app) => {
           }
         : null,
       watchdog: watchdog ? { id: watchdog.id, status: watchdog.status, exitCode: watchdog.exitCode } : null,
-      url: dshUrl(app.config, main?.port, main?.token),
+      url: await app.supervisor.dshUrl(request.user!.id),
     }
   })
 }
