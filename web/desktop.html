@@ -577,6 +577,9 @@
       async function refreshDsh() {
         const r = await api('/api/dsh/status')
         if (!r.ok) return
+        // 无论处于什么状态都先渲染 —— 否则页面刷新后窗口只能显示
+        // HTML 里的静态「未运行」，与已在运行的实例不一致。
+        renderDshState(r.body)
         if (openPending(r.body)) pollDshWhileStarting()
       }
       // starting 期间 1s 快轮询（后台 5s 轮询太慢）；running 但打开链接
@@ -798,6 +801,12 @@
 
       // ---------- 时钟 ----------
       function tick() { document.getElementById('clock').textContent = new Date().toLocaleString('zh-CN', { hour12: false }) }
+
+      // 打开 DSH 窗口即刷新状态：页面可能已加载很久，实例状态（含
+      // 其他标签页里的启停）需要以当前查询结果为准。
+      document.querySelectorAll('[data-open="dsh"]').forEach((el) =>
+        el.addEventListener('click', () => { void refreshDsh() }),
+      )
 
       // ---------- 初始化 ----------
       document.getElementById('logoutBtn').addEventListener('click', async () => { await fetch('/api/auth/logout', { method: 'POST' }); location.href = '/login.html' })
