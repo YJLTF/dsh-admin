@@ -99,6 +99,18 @@ docker compose restart                # 注意：重启会停掉所有运行中�
    ```
 3. 清空 `dsh-cli/` 再重启即可回退到镜像内置基线版本。
 
+> **宿主机是 Windows 时**，第 2 步的解压必须在 Linux 容器内执行——归档里
+> `node_modules/.bin/` 是 POSIX 符号链接，Windows 的 tar 创建不了（报
+> `Invalid argument`），会留下半套损坏的 `node_modules`（`.bin/dsh` 变成
+> 0 字节文件，子 DSH 反复崩溃熔断）。在仓库根目录用 Git Bash 执行：
+> ```sh
+> MSYS_NO_PATHCONV=1 docker run --rm --entrypoint sh -v "F:\路径\dsh-admin:/w" dsh-admin:latest \
+>   -c "rm -rf /w/dsh-cli/node_modules && tar -xzf /w/scripts/dsh-cli.tgz -C /w/dsh-cli"
+> docker compose restart
+> ```
+> 若清理时遇到 `Directory not empty` 反复出现，是 Docker Desktop 挂载层的
+> 幻影目录，在容器内把 `rm -rf` 循环执行几轮即可。
+
 注意：**不能**直接拷贝 Windows 全局安装的 dsh 包 —— 原生依赖（sharp /
 node-pty / node-addon-require-builtin）是平台相关的，Windows 装的是 win32
 二进制，容器内加载即失败。

@@ -33,6 +33,19 @@
   ```
   （`parseCommandString` 见 `src/config.ts`；含空格的路径必须加双引号。）
 
+## Windows 宿主机解压 dsh-cli.tgz 报 `Invalid argument`，之后子 DSH 熔断崩溃
+
+- **现象**：在 Windows 上 `tar -xzf dsh-cli.tgz` 解压时报 `node_modules/.bin/xxx: Can't create '...': Invalid argument`；之后容器里子 DSH 一启动就退出（`exitCode 0`），自动重启 5 次后熔断，`dsh --version` 无输出。
+- **根因**：归档里 `node_modules/.bin/` 是 POSIX 符号链接，Windows 的 tar 创建不了（需管理员/开发者模式），失败时还会留下 0 字节的假 shim（如 `.bin/dsh`）。解压失败留下的半套 `node_modules` 覆盖挂载目录后，`dsh` 就永远起不来。
+- **修法**：解压放到 Linux 容器里做（`docker-compose.yml` 同级目录、Git Bash）：
+  ```sh
+  MSYS_NO_PATHCONV=1 docker run --rm --entrypoint sh \
+    -v "F:\路径\dsh-admin:/w" dsh-admin:latest \
+    -c "rm -rf /w/dsh-cli/node_modules && tar -xzf /w/scripts/dsh-cli.tgz -C /w/dsh-cli"
+  docker compose restart
+  ```
+  清理时若 `Directory not empty` 反复出现，是 Docker Desktop 挂载层的幻影目录，把 `rm -rf` 在容器里循环执行几轮即可。详见 `docs/deployment-docker.md` 的「只更新 dsh CLI」。
+
 ## 崩溃后的行为（自动重启 / 残留清理）
 
 - 子 DSH 崩溃后状态变 `crashed`（`lastError` 带退出码与 stderr 尾部），编排服务按 `restartBackoffMs`（默认 1s）自动重拉；崩溃重启会换一个新端口（forwarder 随之重建）。

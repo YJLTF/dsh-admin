@@ -9,6 +9,8 @@
 #      a. 有网机器：powershell scripts\pack-dsh.ps1 -Version <版本>  生成 dsh-cli.tgz
 #      b. 传到服务器本目录，执行：
 #         rm -rf dsh-cli/node_modules && tar -xzf dsh-cli.tgz -C dsh-cli
+#         （宿主机是 Windows 时不能直接解压——归档含 POSIX 符号链接，
+#         须在 Linux 容器内解压，见 docs/deployment-docker.md）
 #      c. docker compose restart —— 新起的用户会话即用新版 dsh。
 #      清空 dsh-cli/ 并重启可回退到镜像内置基线版本。
 services:
@@ -25,7 +27,7 @@ services:
       - "3080:3080" # 编排器 Web UI + API
       - "40000-40100:40000-40100" # 每用户子 DSH 端口
     environment:
-      DSH_ADMIN_PUBLIC_HOST: 192.168.0.131 # <- 你的局域网 IP
+      DSH_ADMIN_PUBLIC_HOST: 192.168.31.50 # <- 你的局域网 IP
       DSH_ADMIN_DSH_PORT_MIN: "40000"
       DSH_ADMIN_DSH_PORT_MAX: "40100"
       # DSH_ADMIN_DSH_BIN: "" # 无需设置；默认从 PATH（/opt/dsh）解析 dsh
