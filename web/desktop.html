@@ -106,8 +106,8 @@
         <div class="app" data-app="uploaddir" role="button" tabindex="0" aria-label="上传文件夹"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 16v-5"/><path d="M10 13l2-2 2 2"/></svg></div>
         <div class="app" data-app="newfile" role="button" tabindex="0" aria-label="新建文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v5M9.5 14.5h5"/></svg></div>
         <span class="tsep hidden" id="adminTaskSep" aria-hidden="true"></span>
-        <div class="app hidden" id="adminTask" data-open="admin" role="button" tabindex="0" aria-label="用户管理"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/></svg></div>
-        <div class="app hidden" id="sharedTask" data-open="shared" role="button" tabindex="0" aria-label="共享配置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></div>
+        <div class="app hidden" id="adminTask" data-open="admin" role="button" tabindex="0" aria-label="用户管理" title="用户管理"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/></svg></div>
+        <div class="app hidden" id="sharedTask" data-open="shared" role="button" tabindex="0" aria-label="共享配置" title="共享配置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></div>
         <div class="app hidden" id="opsTask" data-open="ops" role="button" tabindex="0" aria-label="运维监控" title="运维监控"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
         <div class="app hidden" id="auditTask" data-open="audit" role="button" tabindex="0" aria-label="审计日志" title="审计日志"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-7-4-7 4z"/></svg></div>
         <div class="app hidden" id="marketTask" data-open="market" role="button" tabindex="0" aria-label="插件市场" title="插件市场"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v11h16V9"/><path d="M9 13h6"/></svg></div>
@@ -193,7 +193,7 @@
         </div>
         <div class="preview-body" id="previewBody"></div>
         <div class="row-actions modal-actions">
-          <span class="hint" style="flex:1"></span>
+          <span class="tb-spacer"></span>
           <button class="btn ghost hidden" id="previewEdit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>编辑</button>
           <button class="btn primary hidden" id="previewSave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>保存修改</button>
           <button class="btn ghost hidden" id="previewCancelEdit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>取消编辑</button>
@@ -242,7 +242,7 @@
           <div id="pluginPaneEnabled">
             <div class="section-label">当前文件夹插件</div>
             <div id="pluginList"></div>
-            <button class="btn primary small" id="savePluginsBtn" style="margin-top:10px">保存插件选择</button>
+            <button class="btn primary small gap-top-s" id="savePluginsBtn">保存插件选择</button>
           </div>
           <div id="pluginPaneMarket" class="hidden"></div>
         </div>
@@ -323,7 +323,7 @@
         </table>
         <div class="row-actions gap-top-s">
           <button class="btn ghost small" id="addCredBtn">+ 添加凭据</button>
-          <span style="flex:1"></span>
+          <span class="tb-spacer"></span>
           <span id="sharedMeta" class="hint"></span>
           <button class="btn primary" id="saveSharedBtn">保存共享配置</button>
         </div>
@@ -380,7 +380,7 @@
           <tbody></tbody>
         </table>
         <div class="row-actions gap-top-s">
-          <span class="hint" id="opsStorageMeta" style="flex:1"></span>
+          <span class="hint tb-spacer" id="opsStorageMeta"></span>
           <button class="btn ghost small" id="opsStorageRefresh">重新统计</button>
         </div>
       </div>
@@ -484,6 +484,7 @@
       <div class="resize" title="拖动缩放"></div>
     </div>
 
+    <script src="/common.js"></script>
     <script src="/window-manager.js"></script>
     <script src="/shared-config-editor.js"></script>
     <script src="/file-explorer.js"></script>
@@ -500,8 +501,7 @@
       }
 
       // ---------- 辅助函数 ----------
-      /** 对不可信文本进行转义，以便插入 HTML/属性。 */
-      const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+      const { esc } = DshCommon
       /** fetch 封装：绝不抛出异常；返回 { ok, status, body | error }。 */
       async function api(path, options = {}) {
         try {
@@ -526,9 +526,6 @@
 
       // ---------- 窗口管理器（外部） ----------
       const { openWindow, closeWindow, isOpen } = WindowManager
-      // 管理台窗口每次打开时刷新数据。
-      document.querySelectorAll('#adminIcon, #adminTask').forEach((el) => el.addEventListener('click', () => { if (user && user.role === 'admin') loadUsers() }))
-      document.querySelectorAll('#sharedIcon, #sharedTask').forEach((el) => el.addEventListener('click', () => { if (user && user.role === 'admin') loadShared() }))
 
       // ---------- 文件资源管理器（外部模块） ----------
       // 接管路径状态、桌面网格、文件窗口与全部文件操作；
@@ -783,11 +780,21 @@
 
       // ---------- 管理员扩展（运维 / 审计 / 设置 / 市场管理） ----------
       const { loadOps, loadAudit, loadSettings, loadMarketAdmin } = initAdminExtras({ api, esc })
-      // 桌面图标与任务栏按钮共用同一加载入口（点击即刷新数据）。
-      document.querySelectorAll('#opsIcon, #opsTask').forEach((el) => el.addEventListener('click', () => loadOps()))
-      document.querySelectorAll('#auditIcon, #auditTask').forEach((el) => el.addEventListener('click', () => loadAudit()))
-      document.querySelectorAll('#settingsIcon, #settingsTask').forEach((el) => el.addEventListener('click', () => loadSettings()))
-      document.querySelectorAll('#marketIcon, #marketTask').forEach((el) => el.addEventListener('click', () => loadMarketAdmin()))
+      // 管理组窗口每次打开时刷新数据：桌面图标与任务栏按钮共用
+      // 同一加载入口（data-open 匹配两类元素，点击即刷新）。
+      const adminLoaders = {
+        admin: loadUsers,
+        shared: loadShared,
+        ops: loadOps,
+        audit: loadAudit,
+        settings: loadSettings,
+        market: loadMarketAdmin,
+      }
+      for (const [win, load] of Object.entries(adminLoaders)) {
+        document.querySelectorAll(`[data-open="${win}"]`).forEach((el) =>
+          el.addEventListener('click', () => { if (user && user.role === 'admin') load() }),
+        )
+      }
 
       // ---------- 时钟 ----------
       function tick() { document.getElementById('clock').textContent = new Date().toLocaleString('zh-CN', { hour12: false }) }

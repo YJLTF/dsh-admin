@@ -160,6 +160,14 @@ CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);
 ALTER TABLE folder_plugins DROP COLUMN description;
 `
 
+/** v8：清理 users 上只写不读的死列 —— `home_dir`（每用户路径一律由
+ * dataRoot + id 确定性派生，见 fs/workspace.ts，库里的值从未被读取）
+ * 与 `approved_by`（审核人只写入、无任何展示或判定消费）。 */
+const V8_SCHEMA = `
+ALTER TABLE users DROP COLUMN home_dir;
+ALTER TABLE users DROP COLUMN approved_by;
+`
+
 interface Migration {
   version: number
   name: string
@@ -174,6 +182,7 @@ const MIGRATIONS: readonly Migration[] = [
   { version: 5, name: '删除域名表', sql: V5_SCHEMA },
   { version: 6, name: '删除 dsh_instances 与 api_key_ref', sql: V6_SCHEMA },
   { version: 7, name: '会话活跃/应用设置/插件市场', sql: V7_SCHEMA },
+  { version: 8, name: '清理 users 死列', sql: V8_SCHEMA },
 ]
 
 /** 在单个事务内应用所有尚未应用的迁移。 */

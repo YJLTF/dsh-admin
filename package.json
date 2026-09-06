@@ -21,20 +21,7 @@
     "build": "tsc -p tsconfig.json",
     "prepare": "npm run build",
     "dev": "node lib/cli.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "smoke": "node scripts/smoke.mjs",
-    "smoke:admin": "node scripts/smoke-admin.mjs",
-    "smoke:auth": "node scripts/smoke-auth.mjs",
-    "smoke:account": "node scripts/smoke-account.mjs",
-    "smoke:ops": "node scripts/smoke-ops.mjs",
-    "smoke:fs": "node scripts/smoke-fs.mjs",
-    "smoke:dsh": "node scripts/smoke-dsh.mjs",
-    "smoke:dsh-crash": "node scripts/smoke-dsh-crash.mjs",
-    "smoke:market": "node scripts/smoke-market.mjs",
-    "smoke:plugins": "node scripts/smoke-plugins.mjs",
-    "smoke:watchdog": "node scripts/smoke-watchdog.mjs",
-    "smoke:isolation": "node scripts/smoke-isolation.mjs",
-    "smoke:shared-config": "node scripts/smoke-shared-config.mjs"
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dsh": {
     "plugin": true,

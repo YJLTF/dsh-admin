@@ -45,7 +45,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const user = findUserById(app.db, id)
     if (user === undefined) return reply.code(404).send({ error: 'not_found' })
     if (user.role !== 'pending') return reply.code(409).send({ error: 'not_pending' })
-    setUserRole(app.db, id, 'active', request.user?.id)
+    setUserRole(app.db, id, 'active')
     audit(app.db, request.user?.id ?? null, 'approve', JSON.stringify({ userId: id }))
     return { ok: true }
   })
@@ -55,7 +55,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const user = findUserById(app.db, id)
     if (user === undefined) return reply.code(404).send({ error: 'not_found' })
     if (user.role === 'admin') return reply.code(409).send({ error: 'cannot_disable_admin' })
-    setUserRole(app.db, id, 'disabled', request.user?.id)
+    setUserRole(app.db, id, 'disabled')
     deleteUserSessions(app.db, id)
     // 同时拆除该用户仍在运行的任何子 DSH —— 会话虽然没了，
     // 进程 + 转发器也不能继续残留。
@@ -69,7 +69,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const user = findUserById(app.db, id)
     if (user === undefined) return reply.code(404).send({ error: 'not_found' })
     if (user.role !== 'disabled') return reply.code(409).send({ error: 'not_disabled' })
-    setUserRole(app.db, id, 'active', request.user?.id)
+    setUserRole(app.db, id, 'active')
     audit(app.db, request.user?.id ?? null, 'enable', JSON.stringify({ userId: id }))
     return { ok: true }
   })

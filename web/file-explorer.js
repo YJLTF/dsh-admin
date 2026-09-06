@@ -26,16 +26,8 @@
     if (PDF_EXT.indexOf(e) !== -1) return 'pdf'
     return 'text'
   }
-  function fmtSize(bytes) {
-    if (bytes == null) return '—'
-    if (!bytes) return '0 B'
-    var u = ['B', 'KB', 'MB', 'GB']
-    var i = 0
-    var n = bytes
-    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ }
-    return (i ? n.toFixed(1) : n) + ' ' + u[i]
-  }
   function nameOf(path) { return path.split('/').pop() }
+  var fmtSize = window.DshCommon.fmtSize
   function rawUrl(path, download) {
     return '/api/fs/raw?path=' + encodeURIComponent(path) + (download ? '&download=1' : '')
   }
@@ -57,8 +49,15 @@
     var fileIcons = $('fileIcons')
     var deskPathEl = $('deskPath')
     var backBtn = $('backBtn')
-    var TILE_DIR = '<div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>'
-    var TILE_FILE = '<div class="tile file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>'
+    // 目录/文件两个图形路径：桌面 tile 与表格小图标共用，避免 SVG 串散落多处。
+    var ICON_DIR_PATH = '<path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
+    var ICON_FILE_PATH = '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'
+    var TILE_DIR = '<div class="tile files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICON_DIR_PATH + '</svg></div>'
+    var TILE_FILE = '<div class="tile file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICON_FILE_PATH + '</svg></div>'
+    /** 表格里的行内小图标（.ficon）。 */
+    function ficon(type) {
+      return '<svg class="ficon' + (type === 'dir' ? ' dir' : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (type === 'dir' ? ICON_DIR_PATH : ICON_FILE_PATH) + '</svg>'
+    }
     function renderDesktop(entries) {
       fileIcons.innerHTML = ''
       $('folderCount').textContent = entries.length + ' 项'
@@ -181,14 +180,19 @@
       move: '<button class="iconbtn" data-act="move" title="移动到…"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></button>',
       del: '<button class="iconbtn danger" data-act="del" title="删除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>',
     }
-    function renderBreadcrumb() {
-      var parts = ['<span class="crumb" data-path="">根</span>']
+    /** 面包屑 HTML（`根 / a / b`，各段带 data-path 供点击导航）；
+     * 文件窗口位置行与移动对话框共用。 */
+    function crumbsHtml(parts) {
+      var html = ['<span class="crumb" data-path="">根</span>']
       var acc = []
-      for (var i = 0; i < currentPath.length; i++) {
-        acc.push(currentPath[i])
-        parts.push('<span class="sep">/</span><span class="crumb" data-path="' + esc(acc.join('/')) + '">' + esc(currentPath[i]) + '</span>')
+      for (var i = 0; i < parts.length; i++) {
+        acc.push(parts[i])
+        html.push('<span class="sep">/</span><span class="crumb" data-path="' + esc(acc.join('/')) + '">' + esc(parts[i]) + '</span>')
       }
-      breadcrumb.innerHTML = parts.join('')
+      return html.join('')
+    }
+    function renderBreadcrumb() {
+      breadcrumb.innerHTML = crumbsHtml(currentPath)
     }
     /** 渲染前应用：当前目录客户端过滤（搜索框有值且不在全盘搜索模式）
      * + 列排序（名称/大小/修改时间，再点切换升降序）。 */
@@ -218,12 +222,8 @@
         if (p) rows.insertAdjacentHTML('beforeend', '<tr><td class="dir" data-up="1">..</td><td></td><td></td><td></td><td></td></tr>')
         for (var i = 0; i < entries.length; i++) {
           var e = entries[i]
-          var icon = e.type === 'dir'
-            ? '<svg class="ficon dir" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>'
-            : '<svg class="ficon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>'
-          var nameCls = e.type === 'dir'
-            ? ' class="name-cell dir" data-name="' + esc(e.name) + '"'
-            : ' class="name-cell" data-name="' + esc(e.name) + '"'
+          var icon = ficon(e.type)
+          var nameCls = ' class="name-cell' + (e.type === 'dir' ? ' dir' : '') + '" data-name="' + esc(e.name) + '"'
           var actions = ''
           if (e.type === 'file') actions += ACTIONS.preview + ACTIONS.download
           else actions += ACTIONS.zip
@@ -274,9 +274,7 @@
       rows.insertAdjacentHTML('beforeend', '<tr class="empty"><td colspan="5">' + head + '</td></tr>')
       for (var i = 0; i < searchMode.results.length; i++) {
         var hit = searchMode.results[i]
-        var icon = hit.type === 'dir'
-          ? '<svg class="ficon dir" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>'
-          : '<svg class="ficon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>'
+        var icon = ficon(hit.type)
         rows.insertAdjacentHTML(
           'beforeend',
           '<tr class="search-hit" data-path="' + esc(hit.path) + '" data-type="' + hit.type + '"><td class="name-cell">' + icon + esc(hit.path) + '</td><td>' + (hit.type === 'dir' ? '文件夹' : '文件') + '</td><td>' + fmtSize(hit.size) + '</td><td>' + new Date(hit.mtimeMs).toLocaleString() + '</td><td class="actions"><button class="btn small ghost" data-open-hit="1">打开</button></td></tr>',
@@ -336,6 +334,12 @@
     })
 
     // ---------- 工具栏 / 新建对话框 ----------
+    /** Esc 关闭当前显示的浮层（各对话框 / 右键菜单共用）。 */
+    function closeOnEscape(el, close) {
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !el.classList.contains('hidden')) close()
+      })
+    }
     var dialog = $('newFileDialog')
     var nfName = $('nfName')
     var nfType = $('nfType')
@@ -349,9 +353,7 @@
     }
     function closeDialog() { dialog.classList.add('hidden') }
     dialog.addEventListener('click', function (event) { if (event.target === dialog) closeDialog() })
-    document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && !dialog.classList.contains('hidden')) closeDialog()
-    })
+    closeOnEscape(dialog, closeDialog)
     $('nfOk').addEventListener('click', async function () {
       var name = nfName.value.trim()
       if (!name) { alert('请输入名称'); return }
@@ -485,9 +487,7 @@
     }
     function closeRename() { renameDialog.classList.add('hidden') }
     renameDialog.addEventListener('click', function (event) { if (event.target === renameDialog) closeRename() })
-    document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && !renameDialog.classList.contains('hidden')) closeRename()
-    })
+    closeOnEscape(renameDialog, closeRename)
     $('rnOk').addEventListener('click', async function () {
       var name = rnName.value.trim()
       if (!name) { alert('请输入名称'); return }
@@ -514,19 +514,11 @@
     }
     function closeMove() { moveDialog.classList.add('hidden') }
     moveDialog.addEventListener('click', function (event) { if (event.target === moveDialog) closeMove() })
-    document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && !moveDialog.classList.contains('hidden')) closeMove()
-    })
+    closeOnEscape(moveDialog, closeMove)
     async function renderMoveDialog() {
       var p = moveTarget.join('/')
       moveHereBtn.disabled = true
-      var parts = ['<span class="crumb" data-path="">根</span>']
-      var acc = []
-      for (var i = 0; i < moveTarget.length; i++) {
-        acc.push(moveTarget[i])
-        parts.push('<span class="sep">/</span><span class="crumb" data-path="' + esc(acc.join('/')) + '">' + esc(moveTarget[i]) + '</span>')
-      }
-      moveCrumbs.innerHTML = parts.join('')
+      moveCrumbs.innerHTML = crumbsHtml(moveTarget)
       var r = await api('/api/desktop/tree' + (p ? '?path=' + encodeURIComponent(p) : ''))
       moveDirs.innerHTML = ''
       if (!r.ok) {
@@ -649,9 +641,7 @@
     })
     previewModal.addEventListener('click', function (event) { if (event.target === previewModal) closePreview() })
     $('previewCloseBtn').addEventListener('click', closePreview)
-    document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && !previewModal.classList.contains('hidden')) closePreview()
-    })
+    closeOnEscape(previewModal, closePreview)
     function el(tag, cls, text) {
       var node = document.createElement(tag)
       if (cls) node.className = cls
@@ -774,9 +764,7 @@
       document.addEventListener('pointerdown', function (event) {
         if (!ctxMenu.classList.contains('hidden') && !ctxMenu.contains(event.target)) closeCtx()
       })
-      document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape' && !ctxMenu.classList.contains('hidden')) closeCtx()
-      })
+      closeOnEscape(ctxMenu, closeCtx)
       document.addEventListener('scroll', function () {
         if (!ctxMenu.classList.contains('hidden')) closeCtx()
       }, true)
@@ -825,9 +813,7 @@
     function closeProps() { propsDialog.classList.add('hidden') }
     propsDialog.addEventListener('click', function (event) { if (event.target === propsDialog) closeProps() })
     $('propsClose').addEventListener('click', closeProps)
-    document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && !propsDialog.classList.contains('hidden')) closeProps()
-    })
+    closeOnEscape(propsDialog, closeProps)
 
     return { pathString: pathString, syncAll: syncAll, navigate: navigate }
   }

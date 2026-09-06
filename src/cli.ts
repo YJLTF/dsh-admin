@@ -91,10 +91,9 @@ async function bootstrapAdmin(args: string[]): Promise<void> {
     process.exit(1)
   }
   const id = randomUUID()
-  const homeDir = userHomeDir(config, id)
-  await ensureUserDir(homeDir)
+  await ensureUserDir(userHomeDir(config, id))
   const passHash = await hashPassword(password)
-  createUser(db, { id, username, passHash, role: 'admin', homeDir })
+  createUser(db, { id, username, passHash, role: 'admin' })
   db.close()
   console.log(`管理员 "${username}" 已创建（id: ${id}）`)
 }

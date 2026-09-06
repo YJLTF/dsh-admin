@@ -18,9 +18,7 @@ export interface User {
   username: string
   pass_hash: string
   role: UserRole
-  home_dir: string
   created_at: number
-  approved_by: string | null
 }
 
 /** 可安全通过网络返回的用户结构。 */
@@ -31,7 +29,7 @@ export interface PublicUser {
   createdAt: number
 }
 
-const USER_COLS = 'id, username, pass_hash, role, home_dir, created_at, approved_by'
+const USER_COLS = 'id, username, pass_hash, role, created_at'
 
 function toUser(row: Record<string, unknown>): User {
   return {
@@ -39,9 +37,7 @@ function toUser(row: Record<string, unknown>): User {
     username: row.username as string,
     pass_hash: row.pass_hash as string,
     role: row.role as UserRole,
-    home_dir: row.home_dir as string,
     created_at: row.created_at as number,
-    approved_by: (row.approved_by as string | null) ?? null,
   }
 }
 
@@ -54,22 +50,19 @@ export interface CreateUserInput {
   username: string
   passHash: string
   role: UserRole
-  homeDir: string
 }
 
 export function createUser(db: Database, input: CreateUserInput): User {
   const createdAt = Date.now()
   prepare(db,
-    'INSERT INTO users (id, username, pass_hash, role, home_dir, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-  ).run(input.id, input.username, input.passHash, input.role, input.homeDir, createdAt)
+    'INSERT INTO users (id, username, pass_hash, role, created_at) VALUES (?, ?, ?, ?, ?)',
+  ).run(input.id, input.username, input.passHash, input.role, createdAt)
   return {
     id: input.id,
     username: input.username,
     pass_hash: input.passHash,
     role: input.role,
-    home_dir: input.homeDir,
     created_at: createdAt,
-    approved_by: null,
   }
 }
 
@@ -95,11 +88,8 @@ export function countAdmins(db: Database): number {
   return row.n
 }
 
-export function setUserRole(db: Database, id: string, role: UserRole, approvedBy?: string): boolean {
-  const info =
-    approvedBy === undefined
-      ? prepare(db,'UPDATE users SET role = ? WHERE id = ?').run(role, id)
-      : prepare(db,'UPDATE users SET role = ?, approved_by = ? WHERE id = ?').run(role, approvedBy, id)
+export function setUserRole(db: Database, id: string, role: UserRole): boolean {
+  const info = prepare(db, 'UPDATE users SET role = ? WHERE id = ?').run(role, id)
   return info.changes > 0
 }
 
@@ -113,8 +103,6 @@ export function updateUserPassword(db: Database, id: string, passHash: string): 
  * shared_config_state / user_plugins 均带 ON DELETE CASCADE 随行消失；
  * audit_log 有意保留（actor 是普通文本列，不留悬挂引用）。 */
 export function deleteUser(db: Database, id: string): boolean {
-  // approved_by 指向本用户的行先清引用，否则外键约束会让删除失败。
-  prepare(db, 'UPDATE users SET approved_by = NULL WHERE approved_by = ?').run(id)
   const info = prepare(db, 'DELETE FROM users WHERE id = ?').run(id)
   return info.changes > 0
 }
@@ -342,7 +330,7 @@ export interface SessionUser {
 export function findSessionWithUser(db: Database, tokenHash: string): SessionUser | undefined {
   const row = prepare(
     db,
-    `SELECT u.id, u.username, u.pass_hash, u.role, u.home_dir, u.created_at, u.approved_by,
+    `SELECT u.id, u.username, u.pass_hash, u.role, u.created_at,
             s.expires_at, COALESCE(s.last_used_at, s.created_at) AS last_used_at
      FROM sessions s JOIN users u ON s.user_id = u.id
      WHERE s.token_hash = ?`,

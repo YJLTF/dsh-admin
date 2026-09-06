@@ -20,15 +20,6 @@ import { isTextByExtension, lookupMime, sniffIsBinary } from '../../fs/mime.js'
 
 const pathSchema = { type: 'string', maxLength: 512 }
 
-const mkdirSchema = {
-  body: {
-    type: 'object',
-    required: ['path'],
-    additionalProperties: false,
-    properties: { path: pathSchema },
-  },
-} as const
-
 const createSchema = {
   body: {
     type: 'object',
@@ -190,21 +181,6 @@ export const fsRoutes: FastifyPluginAsync = async (app) => {
       return { path, entries: await listDir(p.abs) }
     } catch {
       return reply.code(404).send({ error: 'not_found' })
-    }
-  })
-
-  app.post('/api/fs/mkdir', { preHandler: requireAuth, schema: mkdirSchema }, async (request, reply) => {
-    const { path } = request.body as { path: string }
-    const p = resolveUserPath(config, request.user!.id, path)
-    if (!p.ok) return reply.code(400).send({ error: 'bad_path' })
-    try {
-      await mkdir(p.abs)
-      return { ok: true }
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code
-      if (code === 'EEXIST') return reply.code(409).send({ error: 'exists' })
-      if (code === 'ENOENT') return reply.code(404).send({ error: 'parent_missing' })
-      throw err
     }
   })
 

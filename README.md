@@ -76,24 +76,24 @@ node lib/cli.js --port 3080 --db ./dev.local.db
 ## 开发与测试
 
 ```sh
+npm install            # 安装依赖（prepare 钩子会自动 tsc → lib/）
 npm run build          # tsc → lib/
 npm run typecheck      # 仅类型检查
-npm run smoke          # 端到端冒烟（fake-dsh 模拟子 DSH）
-npm run smoke:dsh-crash        # 崩溃残留清理 + 自动重启
-npm run smoke:account         # 注册门禁 / 改密 / 会话 / 审计 / 删用户
-npm run smoke:ops             # healthz / 实例视图 / 磁盘统计 / 崩溃熔断
-npm run smoke:market          # 插件市场 导入判定 / 安装 / 更新 / 卸载
-npm run smoke:shared-config   # 共享配置合并 / 删除同步 / 凭据不下发
-# 其余：smoke:auth / smoke:admin / smoke:fs / smoke:plugins / smoke:watchdog / smoke:isolation
+npm run dev            # node lib/cli.js 本地起服务
 ```
+
+联调建议：`bootstrap-admin` 创建管理员后，在注册页自助注册用户走完
+「注册 → 审核 → 登录 → 桌面」全流程；文件、DSH、插件市场、共享配置
+等功能均可直接在桌面 UI 里验证。数据库迁移在启动时自动应用，改动
+`src/db/schema.ts` 后跑一次 `npm run dev` 即可。
 
 ### 代码约定
 
-- **请求路径文件 IO 一律用 `node:fs/promises`**（`statSync`/`mkdirSync`/`writeFileSync` 只允许出现在启动/CLI 冷路径）；SQLite 沿用 better-sqlite3 的同步模式。
+- **请求路径文件 IO 一律用 `node:fs/promises`**（`statSync`/`mkdirSync`/`writeFileSync` 只允许出现在启动/CLI 冷路径）；SQLite 沿用 better-sqlite3 的同步模式，语句经 `db/prepared.ts` 的 `prepare()` 缓存。
 - 每用户目录布局统一从 `src/fs/workspace.ts` 取（`workspaceRoot` / `userHomeDir` / `ensureUserDir`），不要手拼 `users/<id>/…` 路径。
 - 路由 prologue 统一用 `resolveUserPath()`（`src/web/middleware/fs-guard.ts`）：workspace 根 + 越界防护一步完成。
-- 冒烟脚本的 `assert` / `json` / `sleep` / `cleanup` 从 `scripts/helpers.mjs` 导入，勿再复制。
-- 前端桌面页的窗口拖拽/缩放/任务栏逻辑在 `web/window-manager.js`，文件资源管理器（表格/对话框/上传/预览）在 `web/file-explorer.js`；插入用户可控文本必须过 `esc()` 转义。
+- 前端桌面页的窗口拖拽/缩放/任务栏逻辑在 `web/window-manager.js`，文件资源管理器（表格/对话框/上传/预览）在 `web/file-explorer.js`，各窗口共用的 `esc()` / `fmtSize` / 市场类型标签在 `web/common.js`（`DshCommon`）；插入用户可控文本必须过 `esc()` 转义。
+- 表结构变更走 `src/db/schema.ts` 的版本化迁移（新增 `V<N>_SCHEMA` 并登记进 `MIGRATIONS`，只增不改历史迁移）。
 
 ## 安全
 

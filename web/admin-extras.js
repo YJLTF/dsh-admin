@@ -6,18 +6,10 @@
 ;(function () {
   'use strict'
 
-  var KIND_LABEL = { 'cordis-plugin': '插件', skill: '技能', 'agent-preset': '预设' }
+  var fmtSize = window.DshCommon.fmtSize
+  var KIND_LABEL = window.DshCommon.KIND_LABEL
   var STATUS_LABEL = { starting: '启动中', running: '运行中', crashed: '已崩溃', stopped: '已停止' }
 
-  function fmtSize(bytes) {
-    if (bytes == null) return '—'
-    if (!bytes) return '0 B'
-    var u = ['B', 'KB', 'MB', 'GB', 'TB']
-    var i = 0
-    var n = bytes
-    while (n >= 1024 && i < u.length - 1) { n /= 1024; i++ }
-    return (i ? n.toFixed(1) : n) + ' ' + u[i]
-  }
   function fmtUptime(fromMs) {
     var s = Math.max(0, Math.floor((Date.now() - fromMs) / 1000))
     if (s < 60) return s + ' 秒'

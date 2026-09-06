@@ -561,7 +561,6 @@ table.admin tr.empty td { color: var(--ink-soft); text-align: center; padding: 2
 .msg-error { color: var(--danger); font-size: 12px; margin: 2px 0; }
 .market-card { display: block; padding: 8px 10px; }
 .market-card .row-actions { margin-top: 4px; }
-.plugin-panel-tabs { display: flex; gap: 8px; margin-bottom: 8px; }
 
 /* ---------- v0.2.1：分组工具条 + 语义按钮（控制按钮排布） ----------
  * 原先各窗口把动作 / 搜索 / 面包屑混排在同一行 flex 里，按钮全部

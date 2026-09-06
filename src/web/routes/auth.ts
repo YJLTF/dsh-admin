@@ -18,7 +18,6 @@ import {
   findUserById,
   getSetting,
   listUserSessions,
-  purgeExpiredSessions,
   toPublicUser,
   updateUserPassword,
 } from '../../db/repo.js'
@@ -95,11 +94,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(409).send({ error: 'username_taken' })
       }
       const id = randomUUID()
-      const homeDir = userHomeDir(app.config, id)
-      await ensureUserDir(homeDir)
+      await ensureUserDir(userHomeDir(app.config, id))
       const passHash = await hashPassword(password)
       try {
-        createUser(db, { id, username, passHash, role: 'pending', homeDir })
+        createUser(db, { id, username, passHash, role: 'pending' })
       } catch (err) {
         // 并发注册同名用户：预检查通过但 INSERT 撞 UNIQUE 约束 → 409。
         if ((err as NodeJS.ErrnoException).code?.startsWith('SQLITE_CONSTRAINT')) {
@@ -126,9 +124,6 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       if (user.role === 'disabled') return reply.code(403).send({ error: 'disabled' })
 
       const token = newSessionToken()
-      // 把过期会话清理搭在登录上（低频操作，让表不会无限增长，
-      // 省去单独的清扫器）。
-      purgeExpiredSessions(db)
       createSession(db, {
         tokenHash: hashSessionToken(token),
         userId: user.id,
