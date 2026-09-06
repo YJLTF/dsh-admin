@@ -197,6 +197,7 @@ export function probeIndex(port: number): Promise<IndexState> {
       done((res.statusCode ?? 200) === 401 ? 'gated' : 'open')
     })
     req.on('error', () => done('down'))
+    req.end()
   })
 }
 
