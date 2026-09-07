@@ -9,6 +9,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { requireAdmin } from '../middleware/authn.js'
+import { parseLimit } from '../params.js'
 import {
   audit,
   deleteUser,
@@ -91,7 +92,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     },
   )
 
-  app.post('/api/admin/users/:id/delete', { preHandler: requireAdmin }, async (request, reply) => {
+  app.delete('/api/admin/users/:id', { preHandler: requireAdmin }, async (request, reply) => {
     const { id } = request.params as { id: string }
     const user = findUserById(app.db, id)
     if (user === undefined) return reply.code(404).send({ error: 'not_found' })
@@ -155,7 +156,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/admin/audit', { preHandler: requireAdmin }, async (request) => {
     const query = request.query as { page?: string; limit?: string; actor?: string; action?: string }
     const page = Math.max(1, Number.parseInt(query.page ?? '1', 10) || 1)
-    const limit = Math.min(200, Math.max(1, Number.parseInt(query.limit ?? '50', 10) || 50))
+    const limit = parseLimit(query.limit, 50, 200)
     return listAudit(app.db, {
       limit,
       offset: (page - 1) * limit,

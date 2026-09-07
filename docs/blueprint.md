@@ -62,7 +62,7 @@ spawn(dshCommand, ['--profile', 'headless', WATCHDOG_TASK], { /* 同上 */ })
 
 ## 5. 数据模型（SQLite，migration v1）
 
-- v1 使用：`users`、`sessions`、`workspaces`、`folder_plugins`、`audit_log`。v3 增：`shared_config` / `shared_config_state`（共享模型配置）。v4 删：`credential_vault`（每用户密钥库）。v5 删：`domains`（域名/nginx 部署已移除）。v6 删：`dsh_instances` 幽灵表与 `users.api_key_ref` 残留列（实例状态按设计仅存内存）。v7 增：`sessions.last_used_at`（设备管理）、`app_settings`（注册开关/邀请码）、`market_items` / `user_plugins`（离线插件市场），删 `folder_plugins.description` 死列。
+- v1 使用：`users`、`sessions`、`workspaces`、`folder_plugins`、`audit_log`。v3 增：`shared_config` / `shared_config_state`（共享模型配置）。v4 删：`credential_vault`（每用户密钥库）。v5 删：`domains`（域名/nginx 部署已移除）。v6 删：`dsh_instances` 幽灵表与 `users.api_key_ref` 残留列（实例状态按设计仅存内存）。v7 增：`sessions.last_used_at`（设备管理）、`app_settings`（注册开关/邀请码）、`market_items` / `user_plugins`（离线插件市场），删 `folder_plugins.description` 死列。v8 删：`users.home_dir` / `users.approved_by` 死列。v9 增：`market_items.validation` / `disclosure` / `pack_meta`（导入期校验结论、披露声明、打包元数据）。v10 增：`market_items.shared`（推送全员）与 `user_plugins.source`（user/shared 安装来源）。v11 增：`scheduled_tasks` / `scheduled_task_runs`（定时 agent 任务与运行历史）。v12 增：`inbound_webhooks` / `webhook_fire_log`（token 触发器与触发日志，token 只存 SHA-256）。
 
 字段与约束见 `src/db/schema.ts`。
 
@@ -72,11 +72,13 @@ spawn(dshCommand, ['--profile', 'headless', WATCHDOG_TASK], { /* 同上 */ })
 |---|---|---|
 | Auth | `POST /api/auth/register\|login\|logout`、`GET /api/auth/me`、`GET /api/meta`（注册门禁状态）、`POST /api/me/password`、`GET /api/me/sessions`、`DELETE /api/me/sessions/:id` | 已实现（P1/P8） |
 | Admin | `GET /api/admin/users`、`POST /api/admin/users/:id/approve\|disable\|enable\|reset-password\|delete`、`GET/PUT /api/admin/settings`、`GET /api/admin/audit` | 已实现（P1/P8） |
-| Ops | `GET /healthz`、`GET /api/admin/instances`（含 dsh CLI 版本行）、`POST /api/admin/instances/:userId/stop`、`GET /api/admin/storage` | 已实现（P8） |
+| Ops | `GET /healthz`、`GET /api/admin/instances`（含 dsh CLI 版本行）、`POST /api/admin/instances/:userId/stop`、`POST /api/admin/instances/stop-all`、`GET /api/admin/storage`、`GET /api/admin/dsh-cli`（CLI 目录状态）、`POST /api/admin/dsh-cli/update`（上传 dsh-cli.tgz 就地更新，需 `DSH_ADMIN_DSH_CLI_DIR`） | 已实现（P8/P9） |
 | Desktop/FS | `GET /api/desktop/tree`、`POST /api/fs/mkdir\|create\|upload(multipart)\|delete\|rename\|move\|write`、`GET /api/fs/read`（文本预览）、`GET /api/fs/raw`（下载/内联流，支持 Range）、`GET /api/fs/zip`（目录打包）、`GET /api/fs/search`（全工作区搜索） | 已实现（P2/P8；上传为 multipart 流式，文件夹上传保留相对路径） |
 | DSH | `POST /api/dsh/launch\|stop\|restart`、`GET /api/dsh/status`（含连续重启计数/熔断态 + dsh CLI 版本行） | 已实现（P3/P5/P8，内网直连 + forwarder；main+watchdog 编排层） |
 | Plugin | `GET /api/plugins`、`POST /api/plugins/select` | 已实现（P4） |
-| Market | `GET/POST/DELETE /api/admin/market*`、`GET /api/me/market`、`POST /api/me/market/:id/install`、`POST /api/me/market/uninstall` | 已实现（P8，见 [plugins-market.md](plugins-market.md)） |
+| Market | `GET/POST/DELETE /api/admin/market*`、`POST /api/admin/market/:id/validate`、`POST /api/admin/market/:id/shared`、`GET/PUT /api/admin/shared-patch`、`GET /api/me/market`、`POST /api/me/market/:id/install`、`POST /api/me/market/uninstall` | 已实现（P8，见 [plugins-market.md](plugins-market.md)；P9 增多根导入/披露/启动探测/hot reload 语义；P10 增推送全员与共享 patch 层） |
+| Tasks | `GET/POST /api/me/tasks`、`PUT/DELETE /api/me/tasks/:id`、`POST /api/me/tasks/:id/run`、`GET /api/me/tasks/:id/runs` | 已实现（P11，`src/scheduler/scheduler.ts`：30s 到期轮询 → `Supervisor.runHeadless` 一次性执行；单用户并发 1；超时 `DSH_ADMIN_TASK_TIMEOUT_MS` 默认 30 分钟） |
+| Webhooks | `POST /hooks/:token`（公开触发，限流 30/min）、`GET/POST /api/me/webhooks`、`POST /api/me/webhooks/:id/enabled`、`DELETE /api/me/webhooks/:id`、`GET /api/me/webhooks/:id/fires` | 已实现（P11，token 只存 SHA-256；触发即异步 headless 执行并记日志） |
 | SharedConfig | `GET/PUT /api/admin/shared-config`、`GET /api/me/shared-config`、`POST /api/me/shared-config/accept` | 已实现（[shared-config.md](shared-config.md)） |
 | 静态 | `GET /*`（`web/` 下的桌面 SPA：`desktop.html` + `window-manager.js` + `file-explorer.js` + `shared-config-editor.js` + `account.js` + `market.js` + `admin-extras.js`） | 已接 |
 
@@ -89,3 +91,22 @@ spawn(dshCommand, ['--profile', 'headless', WATCHDOG_TASK], { /* 同上 */ })
 P1–P7 已完成：登录审核、桌面/FS、单 DSH 启动、每文件夹插件、守护/双 DSH、硬隔离、共享模型配置（域名/nginx 与每用户密钥库已随内网-only 瘦身移除）。
 
 **P8（v0.2.0）已完成**：账号与会话安全（自助改密/设备管理/审计日志/删用户/注册门禁）、运维面板（全局实例视图与单停、磁盘统计、`/healthz`、崩溃熔断 + 指数退避）、文件管理器增强（在线文本编辑、目录 zip 下载、排序与全工作区搜索）、插件/技能离线市场（管理员 tgz 收录 → 用户安装/更新/卸载，见 [plugins-market.md](plugins-market.md)）。
+
+**P9 已完成**（依托 dsh 0.1.2-rc.1 插件化能力）：
+
+- **插件免重启生效**：rc.1 的 web profile 模板默认 `patchReload: "live"`（监视 profile 级与 home 级 patch 文件），市场装/卸 cordis 插件写完 `cordis.patch.yml` 即被运行中实例热重载；安装响应携带 `reload: hot|restart|none`，按 `dsh --version` 判定（≥0.1.2-rc.1 为 hot），版本未知保守回退重启语义。
+- **市场导入增强**：多包仓库/技能合集子目录扫描（STANDARD §1 顺序 5/8/9，深度 3，逐条目独立存储）；披露徽章（STANDARD §9 最小子集：cloud/network/apiKeys/offlineMode/jurisdiction/retention）；offline-packager `*.meta.json` 附带导入；`bundledDependencies` 覆盖全部运行时依赖时标记「自包含」。
+- **沙箱启动探测**：导入期在临时 home 里先空 profile 启动建基线、再装插件重启一次，以 launchToken 行为就绪信号——模块加载失败/非法插件形态/双注册类启动崩溃在收录时即拦截（dsh 不可用 → skipped 降级；实测 `--dump-config` 不加载第三方插件模块，故不做 dump 级校验）。
+- **dsh CLI 平台内热更新**：管理台上传 `pack-dsh.ps1` 产出的 `dsh-cli.tgz` → 挂载目录内解包校验 → 原子替换 `node_modules`（`DSH_ADMIN_DSH_CLI_DIR`，见 [deployment-docker.md](deployment-docker.md)）+「停止全部运行实例」。
+
+**P10 已完成**（共享资源面，见 [plugins-market.md](plugins-market.md)）：
+
+- **推送全员**：技能/agent 预设可标记 shared，launch 前自动同步进每个用户 home（`src/fs/shared-sync.ts`）；用户不可卸载 shared 来源安装（409），取消推送时降级回自装。cordis 插件刻意不推送（§6.4 双通道冲突）。
+- **管理员共享 patch 层**：维护 home 级 `$DSH_HOME/cordis.patch.yml`（dsh 配置叠加的独立层，与市场 profile 级正交），保存前经形状校验 + 沙箱启动探测（坏 patch 会 fail loud 打挂全员启动），保存即全员原子同步，live 重载即时生效。
+
+**P11 已完成**（自动化面，复用 `Supervisor.runHeadless`）：
+
+- **定时 agent 任务**：每用户以 interval / daily 两种排程定义自然语言 prompt，调度器 30s 轮询到期任务 → 一次性 headless DSH 在该用户工作区执行；单用户并发 1、fire 先重排（服务器崩溃不重复触发、错过的启动后补跑）、输出尾部落运行历史、孤儿运行启动时清扫（`src/scheduler/scheduler.ts`）。
+- **入站 webhook**：`POST /hooks/:token` 公开触发（限流 30/min，token 128-bit、库里只存 SHA-256、失败一律 404），命中即异步 headless 执行（body 的 `message` 拼进 prompt），202 立即返回；触发日志独立落表（`src/web/routes/webhooks.ts`）。
+
+后续候选：会话用量报表（token-meter）、TOTP/LDAP、通知中心。

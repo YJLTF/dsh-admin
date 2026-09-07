@@ -34,8 +34,9 @@ const HELP = `dsh-admin — DSH 服务器登录编排器
   --dsh-bin <cmd>   拉起子 DSH 所用的命令。默认 "dsh"。
                     可包含参数，例如 'node C:/path/to/dsh/bin.js'
                     （路径含空格时请为整个值加引号）。
-  --log-level <l>   Pino 日志级别。默认 "info"。
+  --log-level <l>   Pino 日志级别（fatal/error/warn/info/debug/trace）。默认 "info"。
   --session-ttl <s> 会话有效期（秒）。默认 604800（7 天）。
+  --max-upload <b>  JSON 请求体上限（字节）。默认 26214400（25MB）。
   --isolation-mode <m> 隔离级别："soft" 或 "account"（Linux，需 root）。默认 "soft"。
   -h, --help        显示本帮助。
 

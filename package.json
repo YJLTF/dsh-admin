@@ -21,7 +21,8 @@
     "build": "tsc -p tsconfig.json",
     "prepare": "npm run build",
     "dev": "node lib/cli.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "smoke:market": "node scripts/smoke-market.mjs"
   },
   "dsh": {
     "plugin": true,

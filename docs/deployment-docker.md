@@ -85,24 +85,38 @@ docker compose restart                # 注意：重启会停掉所有运行中�
 ### 只更新 dsh CLI（不重建镜像）
 
 镜像内置一份基线 dsh（`/opt/dsh-image`），首次启动时播种到 `./dsh-cli`。之后
-更新 dsh 无需重建 / 重传镜像：
+更新 dsh 无需重建 / 重传镜像。
+
+**推荐：管理台操作**（`docker-compose.yml` 已默认设置
+`DSH_ADMIN_DSH_CLI_DIR: /opt/dsh`）：
 
 1. 有网机器上打包（linux 平台依赖；持久缓存卷 `dsh-npm-cache` 让重复构建
    只剩 tar 压缩耗时）：
    ```powershell
    powershell -File scripts\pack-dsh.ps1 -Version <npm 版本号|latest>
    ```
-2. 把 `dsh-cli.tgz` 传到服务器上 docker-compose.yml 同级目录，执行：
-   ```sh
-   rm -rf dsh-cli/node_modules && tar -xzf dsh-cli.tgz -C dsh-cli
-   docker compose restart
-   ```
-3. 清空 `dsh-cli/` 再重启即可回退到镜像内置基线版本。
+2. 桌面 → 「运维监控」→ 「dsh CLI 更新」→ 上传 `dsh-cli.tgz`。平台在挂载
+   目录内解包校验（缺 `@deepseek-ai/dsh` 或 `.bin` 即拒绝且不动现有安装），
+   然后原子替换 `node_modules`——归档里的 POSIX 符号链接由 Node 原生解包
+   处理，**Windows 宿主机也无需手工解压**。
+3. 替换完成即落盘：新拉起的会话即用新版；运行中的实例仍用旧版（进程已映射
+   的文件不受换名替换影响）。可点「停止全部运行实例」促使用户重新启动，
+   当前/已装版本不一致时管理台会明示。
 
-> **宿主机是 Windows 时**，第 2 步的解压必须在 Linux 容器内执行——归档里
+**手工方式**（未设置 `DSH_ADMIN_DSH_CLI_DIR` 时仍可用）：把 `dsh-cli.tgz`
+传到服务器上 docker-compose.yml 同级目录，执行：
+```sh
+rm -rf dsh-cli/node_modules && tar -xzf dsh-cli.tgz -C dsh-cli
+docker compose restart
+```
+
+清空 `dsh-cli/` 再重启即可回退到镜像内置基线版本。
+
+> **宿主机是 Windows 时**，手工解压必须在 Linux 容器内执行——归档里
 > `node_modules/.bin/` 是 POSIX 符号链接，Windows 的 tar 创建不了（报
 > `Invalid argument`），会留下半套损坏的 `node_modules`（`.bin/dsh` 变成
-> 0 字节文件，子 DSH 反复崩溃熔断）。在仓库根目录用 Git Bash 执行：
+> 0 字节文件，子 DSH 反复崩溃熔断）。改用管理台上传则完全绕开这一步。
+> Git Bash 手工执行：
 > ```sh
 > MSYS_NO_PATHCONV=1 docker run --rm --entrypoint sh -v "F:\路径\dsh-admin:/w" dsh-admin:latest \
 >   -c "rm -rf /w/dsh-cli/node_modules && tar -xzf /w/scripts/dsh-cli.tgz -C /w/dsh-cli"

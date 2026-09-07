@@ -4,7 +4,7 @@
  * @module dsh-admin/web/server
  */
 
-import Fastify, { type FastifyInstance } from 'fastify'
+import Fastify, { type FastifyError, type FastifyInstance } from 'fastify'
 import fastifyStatic from '@fastify/static'
 import fastifyMultipart from '@fastify/multipart'
 import { fileURLToPath } from 'node:url'
@@ -13,6 +13,7 @@ import type { ServerConfig } from '../config.js'
 import { openDatabase, type Database } from '../db/connection.js'
 import { type PublicUser, purgeExpiredSessions } from '../db/repo.js'
 import { Supervisor } from '../supervisor/orchestrator.js'
+import { Scheduler } from '../scheduler/scheduler.js'
 import { rateLimit } from './middleware/rate-limit.js'
 import { authRoutes } from './routes/auth.js'
 import { adminRoutes } from './routes/admin.js'
@@ -22,12 +23,15 @@ import { pluginRoutes } from './routes/plugins.js'
 import { sharedConfigRoutes } from './routes/shared-config.js'
 import { opsRoutes } from './routes/ops.js'
 import { marketRoutes } from './routes/market.js'
+import { taskRoutes } from './routes/tasks.js'
+import { webhookRoutes } from './routes/webhooks.js'
 
 declare module 'fastify' {
   interface FastifyInstance {
     db: Database
     config: ServerConfig
     supervisor: Supervisor
+    scheduler: Scheduler
   }
   interface FastifyRequest {
     user: PublicUser | null
@@ -44,6 +48,7 @@ const webRoot = join(dirname(fileURLToPath(import.meta.url)), '../../web')
 export async function buildServer(config: ServerConfig): Promise<FastifyInstance> {
   const db = openDatabase(config.dbPath)
   const supervisor = new Supervisor(config)
+  const scheduler = new Scheduler(config, db, supervisor)
 
   const app = Fastify({
     logger: { level: config.logLevel },
@@ -68,9 +73,36 @@ export async function buildServer(config: ServerConfig): Promise<FastifyInstance
     }
   })
 
+  // 统一错误响应形态 { error, message? }：路由里 return reply.code(...).send()
+  // 的分支不会经过这里；到达这里的是 handler throw（未预期失败）与
+  // 框架层错误（schema 校验、body 超限、JSON 解析）。5xx 不向客户端
+  // 泄露内部错误细节，只记日志。
+  app.setErrorHandler((err: FastifyError, request, reply) => {
+    const statusCode = err.statusCode ?? 500
+    if (statusCode >= 500) {
+      request.log.error(err)
+      return reply.code(500).send({ error: 'internal_error' })
+    }
+    const message = typeof err.message === 'string' && err.message !== '' ? err.message : undefined
+    return reply.code(statusCode).send({
+      error: statusCode === 404 ? 'not_found' : 'bad_request',
+      ...(message !== undefined ? { message } : {}),
+    })
+  })
+
+  // 未知 API 路径与页面静态资源一样是 404，但 API 要返回统一的
+  // { error } 形态（而非 Fastify 默认的 { message, error, statusCode }）。
+  app.setNotFoundHandler((request, reply) => {
+    if (request.url.startsWith('/api/') || request.url.startsWith('/hooks/')) {
+      return reply.code(404).send({ error: 'not_found' })
+    }
+    return reply.code(404).send()
+  })
+
   app.decorate('db', db)
   app.decorate('config', config)
   app.decorate('supervisor', supervisor)
+  app.decorate('scheduler', scheduler)
   app.decorateRequest('user', null)
 
   // 过期会话清扫。历史版本搭在登录上（低频、够用）；现在会话表
@@ -78,8 +110,12 @@ export async function buildServer(config: ServerConfig): Promise<FastifyInstance
   const sessionSweeper = setInterval(() => purgeExpiredSessions(db), 60 * 60 * 1000)
   sessionSweeper.unref()
 
+  // 定时 agent 任务调度（到期轮询 + 一次性 headless 执行）。
+  scheduler.start()
+
   app.addHook('onClose', async () => {
     clearInterval(sessionSweeper)
+    scheduler.stop()
     supervisor.teardown()
     db.close()
   })
@@ -110,6 +146,8 @@ export async function buildServer(config: ServerConfig): Promise<FastifyInstance
   await app.register(sharedConfigRoutes)
   await app.register(opsRoutes)
   await app.register(marketRoutes)
+  await app.register(taskRoutes)
+  await app.register(webhookRoutes)
 
   // 静态占位 SPA 最后注册，让精确的 API 路由优先于
   // 通配的静态处理器。

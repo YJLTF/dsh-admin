@@ -15,10 +15,11 @@ DSH 本身是单用户本地工具，没有认证、没有多租户隔离、Web 
 - **登录与审核**：管理员先行（`bootstrap-admin`），用户注册后需管理员审核通过；注册开关与邀请码可由管理员随时调整；独立管理台 UI。
 - **账号与会话安全**：用户自助改密（其他设备会话自动吊销）、登录设备列表与按设备吊销；管理员可重置用户密码、彻底删除用户（含全部数据）；审计日志（登录/审核/改密/插件安装等全动作，可筛选分页）。
 - **每用户隔离的 DSH 环境**：主 DSH 负责正常工作；崩溃时**按需拉起一次守护 DSH** 修复并自动重启；连续崩溃自动熔断（指数退避 + 上限，默认 5 次）后停止重拉、可手动恢复；装插件重启时守护执行主 DSH 给出的 post-restart 命令。
-- **登录桌面**：桌面为「DSH / 文件 / 管理」分组启动坞 + 独立「当前文件夹」内容区（大量文件时内部滚动；图标右键菜单支持打开/重命名/移动/下载/删除/属性；各窗口按内容预设尺寸并记忆位置，底部任务栏含管理入口）；文件资源管理器（文件/文件夹上传含目录结构、新建、重命名、移动、删除、预览[文本/图片/音视频/PDF]、文本在线编辑保存、文件夹 zip 打包下载、列表排序与全工作区搜索）；按文件夹启动/停止/重启 DSH（DSH 窗口显示当前 dsh CLI 版本）；每文件夹独立勾选启用的插件（自动检测该用户 profile 中已安装的插件，持久化并注入 cordis patch）。
-- **插件/技能离线市场**：管理员上传 GitHub 归档（.tar.gz）收录插件（cordis-plugin）/技能（SKILL.md）/agent 预设，用户在桌面一键安装/更新/卸载到自己的 DSH 环境（自动注册 cordis patch，重启生效）。
+- **定时 agent 任务与 Webhook**：用户可用自然语言 prompt 定义排程任务（固定间隔 / 每日定时），由调度器用一次性 headless DSH 在该用户工作区里执行（单用户同一时刻只跑一个，输出留在运行记录）；入站 webhook 把内网事件（CI 完成、审批通过…）转成一次 agent 执行——token 只在创建时显示一次、库里只存 SHA-256，触发异步返回 202，与定时任务共用同一并发通道。
+- **登录桌面**：桌面为「DSH / 文件 / 自动化 / 管理」分组启动坞 + 独立「当前文件夹」内容区（大量文件时内部滚动；图标右键菜单支持打开/重命名/移动/下载/删除/属性；各窗口按内容预设尺寸并记忆位置，底部任务栏含管理入口）；文件资源管理器（文件/文件夹上传含目录结构、新建、重命名、移动、删除、预览[文本/图片/音视频/PDF]、文本在线编辑保存、文件夹 zip 打包下载、列表排序与全工作区搜索）；按文件夹启动/停止/重启 DSH（DSH 窗口显示当前 dsh CLI 版本）；每文件夹独立勾选启用的插件（自动检测该用户 profile 中已安装的插件，持久化并注入 cordis patch）。
+- **插件/技能离线市场**：管理员上传 GitHub 归档（.tar.gz）收录插件（cordis-plugin）/技能（SKILL.md）/agent 预设（多包仓库一次导入多条目；cordis 插件导入时做沙箱启动探测；披露声明展示云端依赖），用户在桌面一键安装/更新/卸载到自己的 DSH 环境；技能/预设可由管理员「推送全员」，launch 时自动装进每个用户 home。dsh ≥0.1.2-rc.1 上 cordis 插件装/卸经 live patch 重载即时生效，旧版回退为提示重启。
 - **内网直连访问**：`DSH_ADMIN_PUBLIC_HOST=<内网IP>` + 固定子 DSH 端口段，Docker 直接发布端口；每实例内置 forwarder（剥 Origin / 注入 `randomUUID` polyfill / 改写 loopback 门 / per-instance 访问令牌门禁 / 交接 dsh ≥0.1.2-alpha.5 web 首页的 launchToken 认证门）保证非安全上下文可用且不绕过登录。
-- **运维面板**：全局实例视图（谁在跑、端口、重启次数、单停不禁号）、每用户磁盘用量统计、`/healthz` 探活（Docker HEALTHCHECK 已接入）；DSH 窗口与运维面板显示当前 dsh CLI 版本（`dsh --version` 探测，约 1 分钟缓存，免重建热更新 dsh 后自动跟进）。
+- **运维面板**：全局实例视图（谁在跑、端口、重启次数、单停不禁号）、每用户磁盘用量统计、`/healthz` 探活（Docker HEALTHCHECK 已接入）；DSH 窗口与运维面板显示当前 dsh CLI 版本（`dsh --version` 探测，约 1 分钟缓存）；配置 `DSH_ADMIN_DSH_CLI_DIR` 后可在管理台上传 `dsh-cli.tgz`（`scripts/pack-dsh.ps1` 产物）就地热更新 CLI，无需重建镜像。
 - **共享模型配置**：管理员统一维护提供方与凭据，用户在桌面一键接收，叶子级合并进自己的 `settings.yaml` / `.credentials.yaml`。
 - **硬隔离**（Linux）：每用户独立 OS 账号（`setuid` 降权），`0700` 目录真正隔离跨用户读。
 
@@ -57,10 +58,15 @@ node lib/cli.js --port 3080 --db ./dev.local.db
 | `DSH_ADMIN_DSH_PORT_MIN/MAX` | `0` | 子 DSH 端口段（Docker 端口映射范围需一致） |
 | `DSH_ADMIN_PORT_GUARD` | `false` | 回环端口守卫（iptables OUTPUT owner-match，Linux + root，防跨用户直连子 DSH） |
 | `DSH_ADMIN_TRUST_PROXY` | `false` | 仅当部署在自控反向代理后设 `true`（否则 `X-Forwarded-For` 可伪造 rate-limit 键）；也可传代理 CIDR 列表 |
+| `DSH_ADMIN_LOG_LEVEL` | `info` | Pino 日志级别（fatal/error/warn/info/debug/trace；也可用 CLI `--log-level`） |
+| `DSH_ADMIN_SESSION_TTL` | `604800` | 会话有效期（秒，默认 7 天） |
+| `DSH_ADMIN_MAX_UPLOAD` | `26214400` | JSON 请求体上限（字节，默认 25MB）；上传走 multipart 流式，不受它限制 |
 | `DSH_ADMIN_MAX_FILE` | `1073741824` | 单个上传文件上限（字节，默认 1 GiB）；上传走 multipart 流式，不受 JSON body 限制 |
 | `DSH_ADMIN_PREVIEW_MAX` | `262144` | 文本预览最多读取的字节数（超出截断并提示） |
 | `DSH_ADMIN_RESTART_BACKOFF` | `1000` | 崩溃自动重启的基准退避（毫秒，指数增长、封顶 30s） |
 | `DSH_ADMIN_MAX_AUTO_RESTARTS` | `5` | 连续自动重启熔断上限（0 = 不熔断）；熔断后状态停在 crashed，可手动再启动 |
+| `DSH_ADMIN_TASK_TIMEOUT_MS` | `1800000` | 单个定时/webhook agent 任务的最长运行时长（毫秒，超时强制终止） |
+| `DSH_ADMIN_DSH_CLI_DIR` | 空 | dsh CLI 挂载目录（Docker 里 `/opt/dsh`）；设置后管理台提供「上传 dsh-cli.tgz 就地更新」 |
 
 其余可调项（`dshCommand`、`spawnAsUserCommand`、`restartBackoffMs`、`sessionTtlSeconds`、`maxUploadBytes` 等）见 `src/config.ts` 与各文档。
 
@@ -80,6 +86,7 @@ npm install            # 安装依赖（prepare 钩子会自动 tsc → lib/）
 npm run build          # tsc → lib/
 npm run typecheck      # 仅类型检查
 npm run dev            # node lib/cli.js 本地起服务
+npm run smoke:market   # 插件市场域逻辑冒烟（判型/披露/启动探测/CLI 更新；先 build）
 ```
 
 联调建议：`bootstrap-admin` 创建管理员后，在注册页自助注册用户走完
@@ -92,8 +99,9 @@ npm run dev            # node lib/cli.js 本地起服务
 - **请求路径文件 IO 一律用 `node:fs/promises`**（`statSync`/`mkdirSync`/`writeFileSync` 只允许出现在启动/CLI 冷路径）；SQLite 沿用 better-sqlite3 的同步模式，语句经 `db/prepared.ts` 的 `prepare()` 缓存。
 - 每用户目录布局统一从 `src/fs/workspace.ts` 取（`workspaceRoot` / `userHomeDir` / `ensureUserDir`），不要手拼 `users/<id>/…` 路径。
 - 路由 prologue 统一用 `resolveUserPath()`（`src/web/middleware/fs-guard.ts`）：workspace 根 + 越界防护一步完成。
-- 前端桌面页的窗口拖拽/缩放/任务栏逻辑在 `web/window-manager.js`，文件资源管理器（表格/对话框/上传/预览）在 `web/file-explorer.js`，各窗口共用的 `esc()` / `fmtSize` / 市场类型标签在 `web/common.js`（`DshCommon`）；插入用户可控文本必须过 `esc()` 转义。
+- 前端桌面页的窗口拖拽/缩放/任务栏逻辑在 `web/window-manager.js`，文件资源管理器（表格/对话框/上传/预览）在 `web/file-explorer.js`；各窗口共用的小工具集中在 `web/common.js`（`DshCommon`：`esc()` / `fmtSize` / `fmtDateTime` / `truncate` / `setMsg` / `withBusy` / `uploadForm` / `emptyRow` / `KIND_LABEL` / `STATE_LABEL`），新增模块优先复用它们而不是再写一份；插入用户可控文本必须过 `esc()` 转义。
 - 表结构变更走 `src/db/schema.ts` 的版本化迁移（新增 `V<N>_SCHEMA` 并登记进 `MIGRATIONS`，只增不改历史迁移）。
+- 「临时文件 + 原子 rename」写盘统一用 `src/fs/storage.ts` 的 `atomicWriteFile()`，不要在路由里再手写。
 
 ## 安全
 

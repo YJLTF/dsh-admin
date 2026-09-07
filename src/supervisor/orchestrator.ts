@@ -209,6 +209,39 @@ export class Supervisor {
     return await this.spawnInstance(userId, 'watchdog', main.folder)
   }
 
+  /** 一次性 headless 任务（定时任务 / webhook 触发）：与主/看门狗生命
+   * 周期完全独立 —— 不进实例表、不占端口、不起转发器；在用户的工作区
+   * 里跑 headless profile，超时 SIGKILL。返回退出码与输出尾部。 */
+  async runHeadless(
+    userId: string,
+    prompt: string,
+    opts: { timeoutMs: number; cwd?: string },
+  ): Promise<{ code: number | null; timedOut: boolean; outputTail: string }> {
+    const [command = 'dsh', ...args] = this.config.dshCommand
+    const child = this.spawnAsUser(userId, command, [...args, '--profile', 'headless', prompt], {
+      cwd: opts.cwd ?? workspaceRoot(this.config, userId),
+      env: this.baseEnv(userId),
+    })
+    let out = ''
+    child.stdout?.on('data', (chunk: Buffer) => {
+      out = (out + chunk.toString()).slice(-8192)
+    })
+    child.stderr?.on('data', (chunk: Buffer) => {
+      out = (out + chunk.toString()).slice(-8192)
+    })
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      child.kill('SIGKILL')
+    }, opts.timeoutMs)
+    const code = await new Promise<number | null>((resolve) => {
+      child.on('error', () => resolve(null)) // spawn 失败（如 ENOENT）
+      child.on('close', (c) => resolve(c))
+    })
+    clearTimeout(timer)
+    return { code, timedOut, outputTail: out.trim().slice(-2000) }
+  }
+
   /** 用户当前的主 DSH + 看门狗。 */
   status(userId: string): UserStatus {
     return { main: this.mains.get(userId), watchdog: this.watchdogs.get(userId) }
@@ -318,7 +351,9 @@ export class Supervisor {
     for (const userId of [...this.mains.keys(), ...this.watchdogs.keys()]) this.stop(userId)
   }
 
-  private handoffPath(userId: string): string {
+  /** 重启命令交接文件的唯一事实来源（`users/<id>/handoff.json`，刻意
+   * 不放在 `home/` 内 —— 修复时那里可能被清空）。restart 路由写入它。 */
+  handoffPath(userId: string): string {
     return join(this.config.dataRoot, 'users', userId, 'handoff.json')
   }
 

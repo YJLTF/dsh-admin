@@ -16,6 +16,7 @@ import { basename, dirname, join, sep } from 'node:path'
 import { requireAuth } from '../middleware/authn.js'
 import { resolveUserPath, resolveWithinRoot, safeFilename } from '../middleware/fs-guard.js'
 import { listDir, statEntry, workspaceRoot } from '../../fs/workspace.js'
+import { atomicWriteFile } from '../../fs/storage.js'
 import { isTextByExtension, lookupMime, sniffIsBinary } from '../../fs/mime.js'
 
 const pathSchema = { type: 'string', maxLength: 512 }
@@ -138,13 +139,13 @@ interface SearchHit {
   mtimeMs: number
 }
 
-/** 递归收集名称包含 `needle`（大小写不敏感）的条目，塞满
- * SEARCH_LIMIT 即停。符号链接目录不深入（防环）。 */
-async function searchTree(root: string, relBase: string, needle: string, out: SearchHit[]): Promise<void> {
-  if (out.length >= SEARCH_LIMIT) return
+/** 递归收集名称包含 `needle`（大小写不敏感）的条目，塞满 limit 即停。
+ * 符号链接目录不深入（防环）。 */
+async function searchTree(root: string, relBase: string, needle: string, out: SearchHit[], limit: number): Promise<void> {
+  if (out.length >= limit) return
   const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
   for (const entry of entries) {
-    if (out.length >= SEARCH_LIMIT) return
+    if (out.length >= limit) return
     const rel = relBase === '' ? entry.name : `${relBase}/${entry.name}`
     if (entry.name.toLowerCase().includes(needle)) {
       const st = await stat(join(root, entry.name)).catch(() => null)
@@ -157,7 +158,7 @@ async function searchTree(root: string, relBase: string, needle: string, out: Se
       })
     }
     if (entry.isDirectory() && !entry.isSymbolicLink()) {
-      await searchTree(join(root, entry.name), rel, needle, out)
+      await searchTree(join(root, entry.name), rel, needle, out, limit)
     }
   }
 }
@@ -426,12 +427,9 @@ export const fsRoutes: FastifyPluginAsync = async (app) => {
       throw err
     }
     if (!existing.isFile()) return reply.code(400).send({ error: 'is_dir' })
-    const tmp = `${p.abs}..editing-${randomBytes(6).toString('hex')}`
     try {
-      await writeFile(tmp, content, 'utf8')
-      await rename(tmp, p.abs)
+      await atomicWriteFile(p.abs, content)
     } catch (err) {
-      await rm(tmp, { force: true }).catch(() => {})
       const code = (err as NodeJS.ErrnoException).code
       if (code === 'ENOENT') return reply.code(404).send({ error: 'parent_missing' })
       throw err
@@ -473,14 +471,16 @@ export const fsRoutes: FastifyPluginAsync = async (app) => {
     },
   )
 
-  /** 全局搜索：按名称匹配（大小写不敏感），封顶 SEARCH_LIMIT 条。 */
+  /** 全局搜索：按名称匹配（大小写不敏感），封顶 SEARCH_LIMIT 条。
+   * 多取一条用于判定 hasMore，恰好命中上限时不误报「还有更多」。 */
   app.get('/api/fs/search', { preHandler: requireAuth }, async (request, reply) => {
     const { q = '' } = request.query as { q?: string }
     const needle = q.trim().toLowerCase()
     if (needle === '') return reply.code(400).send({ error: 'empty_query' })
     if (needle.length > 256) return reply.code(400).send({ error: 'query_too_long' })
     const results: SearchHit[] = []
-    await searchTree(workspaceRoot(config, request.user!.id), '', needle, results)
-    return { query: q, results, hasMore: results.length >= SEARCH_LIMIT }
+    await searchTree(workspaceRoot(config, request.user!.id), '', needle, results, SEARCH_LIMIT + 1)
+    const hasMore = results.length > SEARCH_LIMIT
+    return { query: q, results: results.slice(0, SEARCH_LIMIT), hasMore }
   })
 }

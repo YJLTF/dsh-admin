@@ -101,7 +101,7 @@ export const sharedConfigRoutes: FastifyPluginAsync = async (app) => {
   app.put('/api/admin/shared-config', { preHandler: requireAdmin, schema: putSchema }, async (request, reply) => {
     const payload = (request.body as { payload: SharedConfigPayload }).payload
     const keyError = validateSharedConfigKeys(payload)
-    if (keyError !== null) return reply.code(400).send({ error: 'invalid_key', detail: keyError })
+    if (keyError !== null) return reply.code(400).send({ error: 'invalid_key', message: keyError })
     const row = setSharedConfig(app.db, JSON.stringify(payload))
     audit(app.db, request.user?.id ?? null, 'shared_config_set', JSON.stringify({ version: row.version }))
     return { version: row.version, updatedAt: row.updatedAt }

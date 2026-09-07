@@ -7,11 +7,12 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { requireAuth } from '../middleware/authn.js'
 import { resolveUserPath } from '../middleware/fs-guard.js'
 import { findWorkspaceByPath, getEnabledPluginIds } from '../../db/repo.js'
 import { listInstalledPlugins } from '../../fs/plugins.js'
+import { syncSharedContentForUser } from '../../fs/shared-sync.js'
 import { AlreadyRunningError } from '../../supervisor/orchestrator.js'
 import { renderPatch } from '../../supervisor/patch.js'
 
@@ -39,7 +40,10 @@ function alive(status: string | undefined): boolean {
 }
 
 export const dshRoutes: FastifyPluginAsync = async (app) => {
-  app.post('/api/dsh/launch', { preHandler: requireAuth, schema: launchSchema }, async (request, reply) => {
+  app.post(
+    '/api/dsh/launch',
+    { preHandler: requireAuth, schema: launchSchema, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
     const { folder } = request.body as { folder: string }
     const user = request.user!
     const p = resolveUserPath(app.config, user.id, folder)
@@ -66,6 +70,14 @@ export const dshRoutes: FastifyPluginAsync = async (app) => {
       await writeFile(patchPath, renderPatch(enabled))
     }
 
+    // 共享内容同步（管理员推送的技能/预设 + 共享 patch 层）：尽力而为，
+    // 失败不阻断启动 —— 下次 launch 或管理台操作会再补齐。
+    try {
+      await syncSharedContentForUser(app.config, app.db, user.id)
+    } catch (err) {
+      request.log.warn({ err }, 'shared content sync failed before launch')
+    }
+
     try {
       const instance = await app.supervisor.launch(user.id, p.abs, patchPath)
       return {
@@ -76,7 +88,8 @@ export const dshRoutes: FastifyPluginAsync = async (app) => {
       if (err instanceof AlreadyRunningError) return reply.code(409).send({ error: 'already_running' })
       throw err
     }
-  })
+    },
+  )
 
   app.post('/api/dsh/restart', { preHandler: requireAuth, schema: restartSchema }, async (request, reply) => {
     const { command } = request.body as { command: string }
@@ -86,10 +99,8 @@ export const dshRoutes: FastifyPluginAsync = async (app) => {
     if (app.supervisor.status(user.id).main === undefined) {
       return reply.code(404).send({ error: 'not_running' })
     }
-    // 注意：必须与 Supervisor 私有的 handoffPath() 一致 —— `users/<id>/handoff.json`
-    // （刻意不放在 `home/` 内，修复时那里可能被清空）。
-    const handoffPath = join(app.config.dataRoot, 'users', user.id, 'handoff.json')
-    await mkdir(join(app.config.dataRoot, 'users', user.id), { recursive: true })
+    const handoffPath = app.supervisor.handoffPath(user.id)
+    await mkdir(dirname(handoffPath), { recursive: true })
     await writeFile(handoffPath, JSON.stringify({ command, createdAt: Date.now() }))
     const instance = await app.supervisor.restartMain(user.id)
     if (instance === undefined) return reply.code(404).send({ error: 'not_running' })

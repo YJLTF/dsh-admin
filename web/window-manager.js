@@ -8,7 +8,10 @@
   var STORAGE_PREFIX = 'dsh-win-'
   var MIN_W = 380
   var MIN_H = 240
-  var zTop = 10
+  // 焦点序号上限：封顶后窗口永远压不过 upload-toast(150)/modal(200)/
+  // ctx-menu(300) 这类浮层（否则聚焦约 190 次后窗口会与它们同层）。
+  var Z_TOP = 10
+  var Z_CAP = 140
   // 各窗口按实际内容设定的默认尺寸 [宽, 高]：首次打开且无持久化
   // 几何时使用。表格列多的窗口（文件/运维/审计）偏宽，表单与
   // 状态类窗口（设置/DSH）偏紧凑，避免小内容飘在大空壳里。
@@ -22,6 +25,8 @@
     market: [700, 600],
     audit: [780, 600],
     settings: [520, 400],
+    tasks: [680, 600],
+    webhooks: [680, 560],
   }
   // 连续打开窗口的级联序号：位置逐步向右下偏移，避免完全重叠。
   var cascade = 0
@@ -37,7 +42,8 @@
   function focusWindow(win) {
     document.querySelectorAll('.window').forEach(function (w) { w.classList.remove('focused') })
     win.classList.add('focused')
-    win.style.zIndex = ++zTop
+    Z_TOP = Math.min(Z_TOP + 1, Z_CAP)
+    win.style.zIndex = Z_TOP
   }
 
   function saveWindowState(win) {

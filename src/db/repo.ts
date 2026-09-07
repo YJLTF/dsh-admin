@@ -115,6 +115,14 @@ export function getSetting(db: Database, key: string): string | undefined {
   return row?.value
 }
 
+/** 带更新时间的设置读取（需要展示「最近修改」时用）。 */
+export function getSettingRow(db: Database, key: string): { value: string; updatedAt: number } | undefined {
+  const row = prepare(db, 'SELECT value, updated_at FROM app_settings WHERE key = ?').get(key) as
+    | { value: string; updated_at: number }
+    | undefined
+  return row === undefined ? undefined : { value: row.value, updatedAt: row.updated_at }
+}
+
 export function setSetting(db: Database, key: string, value: string): void {
   prepare(db, `
     INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
@@ -411,7 +419,8 @@ export function countSharedConfigAcceptances(db: Database): number {
 
 // ---- 离线插件市场 ------------------------------------------------------------
 
-/** 市场条目行（`warnings` 为 JSON 字符串数组）。 */
+/** 市场条目行（`warnings`/`validation`/`disclosure`/`pack_meta` 为 JSON 字符串；
+ * 后三者为空串 = 未采集）。`shared` = 管理员推送全员（仅技能/预设）。 */
 export interface MarketItemRow {
   id: string
   kind: 'cordis-plugin' | 'skill' | 'agent-preset'
@@ -420,10 +429,14 @@ export interface MarketItemRow {
   description: string
   dir: string
   warnings: string
+  validation: string
+  disclosure: string
+  packMeta: string
+  shared: boolean
   importedAt: number
 }
 
-const MARKET_COLS = 'id, kind, name, version, description, dir, warnings, imported_at'
+const MARKET_COLS = 'id, kind, name, version, description, dir, warnings, validation, disclosure, pack_meta, shared, imported_at'
 
 function toMarketItem(row: Record<string, unknown>): MarketItemRow {
   return {
@@ -434,6 +447,10 @@ function toMarketItem(row: Record<string, unknown>): MarketItemRow {
     description: row.description as string,
     dir: row.dir as string,
     warnings: row.warnings as string,
+    validation: (row.validation as string | undefined) ?? '',
+    disclosure: (row.disclosure as string | undefined) ?? '',
+    packMeta: (row.pack_meta as string | undefined) ?? '',
+    shared: row.shared === 1 || row.shared === true,
     importedAt: row.imported_at as number,
   }
 }
@@ -466,15 +483,6 @@ export function findMarketItemByKnv(
   return row === undefined ? undefined : toMarketItem(row)
 }
 
-/** 同名条目里最近导入的一版（更新检测用）。 */
-export function latestMarketItemByName(db: Database, kind: string, name: string): MarketItemRow | undefined {
-  const row = prepare(
-    db,
-    `SELECT ${MARKET_COLS} FROM market_items WHERE kind = ? AND name = ? ORDER BY imported_at DESC LIMIT 1`,
-  ).get(kind, name) as Record<string, unknown> | undefined
-  return row === undefined ? undefined : toMarketItem(row)
-}
-
 export interface InsertMarketItemInput {
   id: string
   kind: MarketItemRow['kind']
@@ -483,28 +491,60 @@ export interface InsertMarketItemInput {
   description: string
   dir: string
   warnings: string
+  validation?: string
+  disclosure?: string
+  packMeta?: string
 }
 
 export function insertMarketItem(db: Database, input: InsertMarketItemInput): void {
   prepare(db, `
-    INSERT INTO market_items (id, kind, name, version, description, dir, warnings, imported_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(input.id, input.kind, input.name, input.version, input.description, input.dir, input.warnings, Date.now())
+    INSERT INTO market_items (id, kind, name, version, description, dir, warnings, validation, disclosure, pack_meta, imported_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    input.id,
+    input.kind,
+    input.name,
+    input.version,
+    input.description,
+    input.dir,
+    input.warnings,
+    input.validation ?? '',
+    input.disclosure ?? '',
+    input.packMeta ?? '',
+    Date.now(),
+  )
 }
 
 /** 重新导入同 kind+name+version：指向新目录并刷新元数据。 */
 export function updateMarketItem(
   db: Database,
   id: string,
-  meta: { description: string; dir: string; warnings: string },
+  meta: { description: string; dir: string; warnings: string; validation?: string; disclosure?: string; packMeta?: string },
 ): void {
-  prepare(db, 'UPDATE market_items SET description = ?, dir = ?, warnings = ?, imported_at = ? WHERE id = ?').run(
+  prepare(db, `
+    UPDATE market_items SET
+      description = ?, dir = ?, warnings = ?,
+      validation = COALESCE(?, validation),
+      disclosure = COALESCE(?, disclosure),
+      pack_meta  = COALESCE(?, pack_meta),
+      imported_at = ?
+    WHERE id = ?
+  `).run(
     meta.description,
     meta.dir,
     meta.warnings,
+    meta.validation ?? null,
+    meta.disclosure ?? null,
+    meta.packMeta ?? null,
     Date.now(),
     id,
   )
+}
+
+/** 只刷新校验结论（管理台手动重跑 `--dump-config` 校验），不动其余元数据。 */
+export function updateMarketItemValidation(db: Database, id: string, validation: string): boolean {
+  const info = prepare(db, 'UPDATE market_items SET validation = ? WHERE id = ?').run(validation, id)
+  return info.changes > 0
 }
 
 export function deleteMarketItemRow(db: Database, id: string): boolean {
@@ -512,69 +552,431 @@ export function deleteMarketItemRow(db: Database, id: string): boolean {
   return info.changes > 0
 }
 
-/** 某市场条目被多少用户安装着（管理台展示）。 */
-export function countMarketInstalls(db: Database, marketItemId: string): number {
-  const row = prepare(db, 'SELECT COUNT(*) AS n FROM user_plugins WHERE market_item_id = ?').get(marketItemId) as {
-    n: number
-  }
-  return row.n
+/** 切换条目的「推送全员」标志（仅技能/预设；调用方负责同步用户 home）。 */
+export function setMarketItemShared(db: Database, id: string, shared: boolean): boolean {
+  const info = prepare(db, 'UPDATE market_items SET shared = ? WHERE id = ?').run(shared ? 1 : 0, id)
+  return info.changes > 0
 }
 
-/** 用户已安装的市场条目记录。 */
+/** 全部「推送全员」的条目（技能/预设；market_install 管线会装进用户 home）。 */
+export function listSharedMarketItems(db: Database): MarketItemRow[] {
+  const rows = prepare(
+    db,
+    `SELECT ${MARKET_COLS} FROM market_items WHERE shared = 1 AND kind IN ('skill','agent-preset')`,
+  ).all() as Array<Record<string, unknown>>
+  return rows.map(toMarketItem)
+}
+
+/** 取消推送：该条目在所有用户身上的 shared 安装记录降级回 user
+ * （允许自行卸载/升级）。 */
+export function demoteUserPluginsToUser(db: Database, marketItemId: string): void {
+  prepare(db, "UPDATE user_plugins SET source = 'user' WHERE market_item_id = ? AND source = 'shared'").run(marketItemId)
+}
+
+/** 全部市场条目的安装计数（列表页一次聚合，替代逐条目 COUNT）。 */
+export function countMarketInstallsAll(db: Database): Map<string, number> {
+  const rows = prepare(db, 'SELECT market_item_id, COUNT(*) AS n FROM user_plugins GROUP BY market_item_id').all() as Array<{
+    market_item_id: string
+    n: number
+  }>
+  return new Map(rows.map((row) => [row.market_item_id, row.n]))
+}
+
+/** 每个 (kind, name) 组合最近导入的版本（用户侧更新检测，
+ * 一次聚合替代逐安装行查询）。 */
+export function listLatestItemVersions(db: Database): Map<string, MarketItemRow['version']> {
+  // SQLite 对 bare column + MAX() 聚合保证取自最大值所在行。
+  const rows = prepare(
+    db,
+    'SELECT kind, name, version, MAX(imported_at) AS latest FROM market_items GROUP BY kind, name',
+  ).all() as Array<{ kind: string; name: string; version: string }>
+  return new Map(rows.map((row) => [`${row.kind}/${row.name}`, row.version]))
+}
+
+/** 用户已安装的市场条目记录。`source`: user = 用户自装；
+ * shared = 管理员推送（不可自行卸载，取消推送时降级）。 */
 export interface UserPluginRow {
   marketItemId: string
   kind: MarketItemRow['kind']
   name: string
   version: string
   installedAt: number
+  source: 'user' | 'shared'
 }
 
-export function listUserPlugins(db: Database, userId: string): UserPluginRow[] {
-  const rows = prepare(db, `
-    SELECT market_item_id, kind, name, version, installed_at
-    FROM user_plugins WHERE user_id = ? ORDER BY installed_at DESC
-  `).all(userId) as Array<Record<string, unknown>>
-  return rows.map((row) => ({
-    marketItemId: row.market_item_id as string,
-    kind: row.kind as UserPluginRow['kind'],
-    name: row.name as string,
-    version: row.version as string,
-    installedAt: row.installed_at as number,
-  }))
-}
+const USER_PLUGIN_COLS = 'market_item_id, kind, name, version, installed_at, source'
 
-export function findUserPluginByName(db: Database, userId: string, name: string): UserPluginRow | undefined {
-  const row = prepare(db, `
-    SELECT market_item_id, kind, name, version, installed_at
-    FROM user_plugins WHERE user_id = ? AND name = ?
-  `).get(userId, name) as Record<string, unknown> | undefined
-  if (row === undefined) return undefined
+function toUserPlugin(row: Record<string, unknown>): UserPluginRow {
   return {
     marketItemId: row.market_item_id as string,
     kind: row.kind as UserPluginRow['kind'],
     name: row.name as string,
     version: row.version as string,
     installedAt: row.installed_at as number,
+    source: row.source === 'shared' ? 'shared' : 'user',
   }
+}
+
+export function listUserPlugins(db: Database, userId: string): UserPluginRow[] {
+  const rows = prepare(db, `
+    SELECT ${USER_PLUGIN_COLS}
+    FROM user_plugins WHERE user_id = ? ORDER BY installed_at DESC
+  `).all(userId) as Array<Record<string, unknown>>
+  return rows.map(toUserPlugin)
+}
+
+export function findUserPluginByName(db: Database, userId: string, name: string): UserPluginRow | undefined {
+  const row = prepare(db, `
+    SELECT ${USER_PLUGIN_COLS}
+    FROM user_plugins WHERE user_id = ? AND name = ?
+  `).get(userId, name) as Record<string, unknown> | undefined
+  return row === undefined ? undefined : toUserPlugin(row)
 }
 
 export function upsertUserPlugin(
   db: Database,
   userId: string,
-  input: { marketItemId: string; kind: MarketItemRow['kind']; name: string; version: string },
+  input: { marketItemId: string; kind: MarketItemRow['kind']; name: string; version: string; source?: 'user' | 'shared' },
 ): void {
   prepare(db, `
-    INSERT INTO user_plugins (user_id, market_item_id, kind, name, version, installed_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO user_plugins (user_id, market_item_id, kind, name, version, installed_at, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, name) DO UPDATE SET
       market_item_id = excluded.market_item_id,
       kind = excluded.kind,
       version = excluded.version,
-      installed_at = excluded.installed_at
-  `).run(userId, input.marketItemId, input.kind, input.name, input.version, Date.now())
+      installed_at = excluded.installed_at,
+      source = excluded.source
+  `).run(userId, input.marketItemId, input.kind, input.name, input.version, Date.now(), input.source ?? 'user')
 }
 
 export function removeUserPlugin(db: Database, userId: string, name: string): boolean {
   const info = prepare(db, 'DELETE FROM user_plugins WHERE user_id = ? AND name = ?').run(userId, name)
   return info.changes > 0
+}
+
+// ---- 定时 agent 任务 ----------------------------------------------------------
+
+export type TaskScheduleKind = 'interval' | 'daily'
+export type TaskRunStatus = 'running' | 'ok' | 'fail' | 'timeout'
+
+/** 定时任务行。排程二选一：interval 用 `intervalMinutes`；daily 用
+ * `dailyTime`（本地时间 HH:MM）。 */
+export interface ScheduledTaskRow {
+  id: string
+  userId: string
+  name: string
+  prompt: string
+  scheduleKind: TaskScheduleKind
+  intervalMinutes: number | null
+  dailyTime: string | null
+  enabled: boolean
+  createdAt: number
+  lastRunAt: number | null
+  lastStatus: TaskRunStatus | null
+  nextRunAt: number
+}
+
+const TASK_COLS =
+  'id, user_id, name, prompt, schedule_kind, interval_minutes, daily_time, enabled, created_at, last_run_at, last_status, next_run_at'
+
+function toTask(row: Record<string, unknown>): ScheduledTaskRow {
+  return {
+    id: row.id as string,
+    userId: row.user_id as string,
+    name: row.name as string,
+    prompt: row.prompt as string,
+    scheduleKind: row.schedule_kind as TaskScheduleKind,
+    intervalMinutes: (row.interval_minutes as number | null) ?? null,
+    dailyTime: (row.daily_time as string | null) ?? null,
+    enabled: row.enabled === 1,
+    createdAt: row.created_at as number,
+    lastRunAt: (row.last_run_at as number | null) ?? null,
+    lastStatus: (row.last_status as TaskRunStatus | null) ?? null,
+    nextRunAt: row.next_run_at as number,
+  }
+}
+
+export function insertScheduledTask(db: Database, task: Omit<ScheduledTaskRow, 'lastRunAt' | 'lastStatus'>): void {
+  prepare(db, `
+    INSERT INTO scheduled_tasks
+      (id, user_id, name, prompt, schedule_kind, interval_minutes, daily_time, enabled, created_at, next_run_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    task.id,
+    task.userId,
+    task.name,
+    task.prompt,
+    task.scheduleKind,
+    task.intervalMinutes,
+    task.dailyTime,
+    task.enabled ? 1 : 0,
+    task.createdAt,
+    task.nextRunAt,
+  )
+}
+
+/** 更新任务定义并重排下次运行（编辑/启停共用；nextRunAt 由调用方算好）。
+ * `scheduleKind` 及其参数列一并传入时同一条 UPDATE 覆盖排程两列
+ * （未用的参数列清 NULL —— 排程是二选一结构，不能用 COALESCE 保留旧值）。 */
+export function updateScheduledTask(
+  db: Database,
+  id: string,
+  fields: {
+    name?: string
+    prompt?: string
+    enabled?: boolean
+    nextRunAt?: number
+    schedule?: { kind: TaskScheduleKind; intervalMinutes: number | null; dailyTime: string | null }
+  },
+): boolean {
+  let info
+  if (fields.schedule !== undefined) {
+    info = prepare(db, `
+      UPDATE scheduled_tasks SET
+        name = COALESCE(?, name),
+        prompt = COALESCE(?, prompt),
+        enabled = COALESCE(?, enabled),
+        next_run_at = COALESCE(?, next_run_at),
+        schedule_kind = ?,
+        interval_minutes = ?,
+        daily_time = ?
+      WHERE id = ?
+    `).run(
+      fields.name ?? null,
+      fields.prompt ?? null,
+      fields.enabled === undefined ? null : fields.enabled ? 1 : 0,
+      fields.nextRunAt ?? null,
+      fields.schedule.kind,
+      fields.schedule.intervalMinutes,
+      fields.schedule.dailyTime,
+      id,
+    )
+  } else {
+    info = prepare(db, `
+      UPDATE scheduled_tasks SET
+        name = COALESCE(?, name),
+        prompt = COALESCE(?, prompt),
+        enabled = COALESCE(?, enabled),
+        next_run_at = COALESCE(?, next_run_at)
+      WHERE id = ?
+    `).run(
+      fields.name ?? null,
+      fields.prompt ?? null,
+      fields.enabled === undefined ? null : fields.enabled ? 1 : 0,
+      fields.nextRunAt ?? null,
+      id,
+    )
+  }
+  return info.changes > 0
+}
+
+/** 调度器触发后回写：last_run_at/last_status/next_run_at。 */
+export function recordTaskFired(db: Database, id: string, firedAt: number, nextRunAt: number): void {
+  prepare(db, 'UPDATE scheduled_tasks SET last_run_at = ?, next_run_at = ? WHERE id = ?').run(firedAt, nextRunAt, id)
+}
+
+export function recordTaskResult(db: Database, id: string, status: TaskRunStatus, at: number): void {
+  prepare(db, 'UPDATE scheduled_tasks SET last_status = ?, last_run_at = ? WHERE id = ?').run(status, at, id)
+}
+
+export function findScheduledTask(db: Database, id: string): ScheduledTaskRow | undefined {
+  const row = prepare(db, `SELECT ${TASK_COLS} FROM scheduled_tasks WHERE id = ?`).get(id) as
+    | Record<string, unknown>
+    | undefined
+  return row === undefined ? undefined : toTask(row)
+}
+
+export function listUserTasks(db: Database, userId: string): ScheduledTaskRow[] {
+  const rows = prepare(db, `SELECT ${TASK_COLS} FROM scheduled_tasks WHERE user_id = ? ORDER BY created_at DESC`).all(
+    userId,
+  ) as Array<Record<string, unknown>>
+  return rows.map(toTask)
+}
+
+/** 到期且启用的任务（调度器 tick 消费；next_run_at 升序）。 */
+export function listDueTasks(db: Database, now: number, limit: number): ScheduledTaskRow[] {
+  const rows = prepare(db, `
+    SELECT ${TASK_COLS} FROM scheduled_tasks
+    WHERE enabled = 1 AND next_run_at <= ?
+    ORDER BY next_run_at ASC LIMIT ?
+  `).all(now, limit) as Array<Record<string, unknown>>
+  return rows.map(toTask)
+}
+
+export function countUserTasks(db: Database, userId: string): number {
+  const row = prepare(db, 'SELECT COUNT(*) AS n FROM scheduled_tasks WHERE user_id = ?').get(userId) as { n: number }
+  return row.n
+}
+
+export function deleteScheduledTask(db: Database, id: string): boolean {
+  const info = prepare(db, 'DELETE FROM scheduled_tasks WHERE id = ?').run(id)
+  return info.changes > 0
+}
+
+export interface TaskRunRow {
+  id: string
+  taskId: string
+  triggerKind: string
+  startedAt: number
+  finishedAt: number | null
+  status: TaskRunStatus
+  detail: string | null
+}
+
+export function insertTaskRun(db: Database, run: { id: string; taskId: string; triggerKind: string; startedAt: number }): void {
+  prepare(db, 'INSERT INTO scheduled_task_runs (id, task_id, trigger_kind, started_at, status) VALUES (?, ?, ?, ?, ?)').run(
+    run.id,
+    run.taskId,
+    run.triggerKind,
+    run.startedAt,
+    'running',
+  )
+}
+
+export function finishTaskRun(
+  db: Database,
+  id: string,
+  result: { finishedAt: number; status: TaskRunStatus; detail?: string | null },
+): void {
+  prepare(db, 'UPDATE scheduled_task_runs SET finished_at = ?, status = ?, detail = ? WHERE id = ?').run(
+    result.finishedAt,
+    result.status,
+    result.detail ?? null,
+    id,
+  )
+}
+
+export function listTaskRuns(db: Database, taskId: string, limit: number): TaskRunRow[] {
+  const rows = prepare(db, `
+    SELECT id, task_id, trigger_kind, started_at, finished_at, status, detail
+    FROM scheduled_task_runs WHERE task_id = ? ORDER BY started_at DESC LIMIT ?
+  `).all(taskId, limit) as Array<Record<string, unknown>>
+  return rows.map((row) => ({
+    id: row.id as string,
+    taskId: row.task_id as string,
+    triggerKind: row.trigger_kind as string,
+    startedAt: row.started_at as number,
+    finishedAt: (row.finished_at as number | null) ?? null,
+    status: (row.status as TaskRunStatus) ?? 'running',
+    detail: (row.detail as string | null) ?? null,
+  }))
+}
+
+/** 启动清扫：服务器关停期间「running」状态孤儿运行标记为 fail。 */
+export function failStaleRunningRuns(db: Database, at: number): void {
+  prepare(db, "UPDATE scheduled_task_runs SET status = 'fail', finished_at = ?, detail = ? WHERE status = 'running'").run(
+    at,
+    '服务器重启，运行被中断',
+  )
+}
+
+// ---- 入站 webhook ------------------------------------------------------------
+
+/** webhook 定义行。原始 token 只在创建响应里出现一次；库里只存
+ * SHA-256（与登录会话令牌同一套哈希策略）。 */
+export interface WebhookRow {
+  id: string
+  userId: string
+  name: string
+  prompt: string
+  tokenHash: string
+  enabled: boolean
+  createdAt: number
+  lastFiredAt: number | null
+}
+
+const WEBHOOK_COLS = 'id, user_id, name, prompt, token_hash, enabled, created_at, last_fired_at'
+
+function toWebhook(row: Record<string, unknown>): WebhookRow {
+  return {
+    id: row.id as string,
+    userId: row.user_id as string,
+    name: row.name as string,
+    prompt: row.prompt as string,
+    tokenHash: row.token_hash as string,
+    enabled: row.enabled === 1,
+    createdAt: row.created_at as number,
+    lastFiredAt: (row.last_fired_at as number | null) ?? null,
+  }
+}
+
+export function insertWebhook(db: Database, hook: Omit<WebhookRow, 'lastFiredAt'>): void {
+  prepare(db, `
+    INSERT INTO inbound_webhooks (id, user_id, name, prompt, token_hash, enabled, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(hook.id, hook.userId, hook.name, hook.prompt, hook.tokenHash, hook.enabled ? 1 : 0, hook.createdAt)
+}
+
+export function findWebhook(db: Database, id: string): WebhookRow | undefined {
+  const row = prepare(db, `SELECT ${WEBHOOK_COLS} FROM inbound_webhooks WHERE id = ?`).get(id) as
+    | Record<string, unknown>
+    | undefined
+  return row === undefined ? undefined : toWebhook(row)
+}
+
+/** 按 token 哈希查找（触发热路径；token_hash 有 UNIQUE 索引）。 */
+export function findWebhookByTokenHash(db: Database, tokenHash: string): WebhookRow | undefined {
+  const row = prepare(db, `SELECT ${WEBHOOK_COLS} FROM inbound_webhooks WHERE token_hash = ?`).get(tokenHash) as
+    | Record<string, unknown>
+    | undefined
+  return row === undefined ? undefined : toWebhook(row)
+}
+
+export function listUserWebhooks(db: Database, userId: string): WebhookRow[] {
+  const rows = prepare(db, `SELECT ${WEBHOOK_COLS} FROM inbound_webhooks WHERE user_id = ? ORDER BY created_at DESC`).all(
+    userId,
+  ) as Array<Record<string, unknown>>
+  return rows.map(toWebhook)
+}
+
+export function countUserWebhooks(db: Database, userId: string): number {
+  const row = prepare(db, 'SELECT COUNT(*) AS n FROM inbound_webhooks WHERE user_id = ?').get(userId) as { n: number }
+  return row.n
+}
+
+export function deleteWebhook(db: Database, id: string): boolean {
+  const info = prepare(db, 'DELETE FROM inbound_webhooks WHERE id = ?').run(id)
+  return info.changes > 0
+}
+
+export function setWebhookEnabled(db: Database, id: string, enabled: boolean): boolean {
+  const info = prepare(db, 'UPDATE inbound_webhooks SET enabled = ? WHERE id = ?').run(enabled ? 1 : 0, id)
+  return info.changes > 0
+}
+
+export function recordWebhookFired(db: Database, id: string, at: number): void {
+  prepare(db, 'UPDATE inbound_webhooks SET last_fired_at = ? WHERE id = ?').run(at, id)
+}
+
+export function insertWebhookFireLog(
+  db: Database,
+  entry: { webhookId: string; firedAt: number; status: string; detail?: string | null },
+): void {
+  prepare(db, 'INSERT INTO webhook_fire_log (webhook_id, fired_at, status, detail) VALUES (?, ?, ?, ?)').run(
+    entry.webhookId,
+    entry.firedAt,
+    entry.status,
+    entry.detail ?? null,
+  )
+}
+
+export interface WebhookFireLogRow {
+  id: number
+  firedAt: number
+  status: string
+  detail: string | null
+}
+
+export function listWebhookFireLog(db: Database, webhookId: string, limit: number): WebhookFireLogRow[] {
+  const rows = prepare(db, `
+    SELECT id, fired_at, status, detail FROM webhook_fire_log
+    WHERE webhook_id = ? ORDER BY fired_at DESC LIMIT ?
+  `).all(webhookId, limit) as Array<Record<string, unknown>>
+  return rows.map((row) => ({
+    id: row.id as number,
+    firedAt: row.fired_at as number,
+    status: row.status as string,
+    detail: (row.detail as string | null) ?? null,
+  }))
 }

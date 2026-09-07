@@ -58,6 +58,11 @@ export interface ServerConfig {
   /** 信任 `X-Forwarded-*` 头（仅当部署在你自己控制的反向代理之后；
    * 否则 `request.ip` —— 以及限流桶 —— 将可被伪造）。 */
   trustProxy: boolean | string
+  /** dsh CLI 的挂载目录（Docker 里为 /opt/dsh）。非空时管理台提供
+   * 「上传 dsh-cli.tgz 就地更新 CLI」；空字符串 = 平台不管 CLI 更新。 */
+  dshCliDir: string
+  /** 单个定时 agent 任务的最长运行时长（毫秒），超时 SIGKILL。 */
+  scheduledTaskTimeoutMs: number
 }
 
 /** 从 argv / 环境变量收集的未类型化覆盖项。 */
@@ -83,6 +88,8 @@ export interface ConfigOverrides {
   dshPortMax?: number | string
   portGuard?: boolean
   trustProxy?: boolean | string
+  dshCliDir?: string
+  scheduledTaskTimeoutMs?: number | string
 }
 
 const DEFAULT_HOST = '127.0.0.1'
@@ -108,6 +115,18 @@ const DEFAULT_SPAWN_AS_USER_COMMAND = [
 ]
 const DEFAULT_BASE_UID = 100000
 const DEFAULT_ENABLE_PATCH = false
+
+/** Pino 接受的日志级别（白名单校验，拼错启动时报清晰错误）。 */
+const LOG_LEVELS = new Set(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
+
+function toLogLevel(value: string | undefined): string {
+  if (value === undefined) return DEFAULT_LOG_LEVEL
+  const normalized = value.trim().toLowerCase()
+  if (!LOG_LEVELS.has(normalized)) {
+    throw new Error(`无效的日志级别 "${value}"（应为 ${[...LOG_LEVELS].join('/')}）`)
+  }
+  return normalized
+}
 
 function toBool(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) return fallback
@@ -198,12 +217,12 @@ export function resolveConfig(overrides: ConfigOverrides = {}): ServerConfig {
     throw new Error(`无效的 uid 基数：${baseUid}（应为整数）`)
   }
   return {
-    host: overrides.host ?? process.env.DSH_ADMIN_HOST ?? DEFAULT_HOST,
+    host: (overrides.host ?? process.env.DSH_ADMIN_HOST ?? DEFAULT_HOST).trim(),
     port,
     dbPath: overrides.dbPath ?? join(dataRoot, 'server-login.db'),
     dataRoot,
     dshCommand: overrides.dshCommand ?? (dshBin !== undefined && dshBin !== '' ? parseCommandString(dshBin) : DEFAULT_DSH_COMMAND),
-    logLevel: overrides.logLevel ?? DEFAULT_LOG_LEVEL,
+    logLevel: toLogLevel(overrides.logLevel ?? process.env.DSH_ADMIN_LOG_LEVEL),
     sessionTtlSeconds: toNumber(
       overrides.sessionTtlSeconds ?? process.env.DSH_ADMIN_SESSION_TTL ?? DEFAULT_SESSION_TTL_SECONDS,
       DEFAULT_SESSION_TTL_SECONDS,
@@ -244,10 +263,17 @@ export function resolveConfig(overrides: ConfigOverrides = {}): ServerConfig {
     spawnAsUserCommand: overrides.spawnAsUserCommand ?? DEFAULT_SPAWN_AS_USER_COMMAND,
     baseUid,
     enablePatch: overrides.enablePatch ?? toBool(process.env.DSH_ADMIN_ENABLE_PATCH, DEFAULT_ENABLE_PATCH),
-    publicHost: overrides.publicHost ?? process.env.DSH_ADMIN_PUBLIC_HOST ?? '',
+    publicHost: (overrides.publicHost ?? process.env.DSH_ADMIN_PUBLIC_HOST ?? '').trim(),
     dshPortMin,
     dshPortMax,
     portGuard: overrides.portGuard ?? toBool(process.env.DSH_ADMIN_PORT_GUARD, false),
     trustProxy: overrides.trustProxy ?? toTrustProxy(process.env.DSH_ADMIN_TRUST_PROXY),
+    dshCliDir: overrides.dshCliDir ?? process.env.DSH_ADMIN_DSH_CLI_DIR ?? '',
+    scheduledTaskTimeoutMs: toNumber(
+      overrides.scheduledTaskTimeoutMs ?? process.env.DSH_ADMIN_TASK_TIMEOUT_MS ?? 30 * 60_000,
+      30 * 60_000,
+      '定时任务超时（毫秒）',
+      1,
+    ),
   }
 }

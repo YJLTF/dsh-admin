@@ -35,6 +35,9 @@
 
 ## Windows 宿主机解压 dsh-cli.tgz 报 `Invalid argument`，之后子 DSH 熔断崩溃
 
+> 更新 CLI 优先用管理台「运维监控 → dsh CLI 更新」（上传 tgz，平台在容器内
+> 解包并原子替换，见 docs/deployment-docker.md）——本条只在你走手工解压时相关。
+
 - **现象**：在 Windows 上 `tar -xzf dsh-cli.tgz` 解压时报 `node_modules/.bin/xxx: Can't create '...': Invalid argument`；之后容器里子 DSH 一启动就退出（`exitCode 0`），自动重启 5 次后熔断，`dsh --version` 无输出。
 - **根因**：归档里 `node_modules/.bin/` 是 POSIX 符号链接，Windows 的 tar 创建不了（需管理员/开发者模式），失败时还会留下 0 字节的假 shim（如 `.bin/dsh`）。解压失败留下的半套 `node_modules` 覆盖挂载目录后，`dsh` 就永远起不来。
 - **修法**：解压放到 Linux 容器里做（`docker-compose.yml` 同级目录、Git Bash）：

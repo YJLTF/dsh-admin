@@ -87,7 +87,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       if (!registrationOpen(db)) {
         return reply.code(403).send({ error: 'registrations_disabled' })
       }
-      if (inviteRequired(db) && inviteCode !== getSetting(db, SETTING_INVITE_CODE)) {
+      const expectedInvite = getSetting(db, SETTING_INVITE_CODE)
+      if (expectedInvite !== undefined && expectedInvite !== '' && inviteCode !== expectedInvite) {
         return reply.code(403).send({ error: 'invalid_invite' })
       }
       if (findUserByUsername(db, username) !== undefined) {

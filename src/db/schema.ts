@@ -168,6 +168,91 @@ ALTER TABLE users DROP COLUMN home_dir;
 ALTER TABLE users DROP COLUMN approved_by;
 `
 
+/** v9：市场条目的导入期增强元数据 —— `--dump-config` 沙箱校验结论、
+ * 披露声明（STANDARD §9 最小子集）、offline-packager 元数据/自包含
+ * 标记。均为 JSON 文本，空串 = 未采集（旧条目无需回填）。 */
+const V9_SCHEMA = `
+ALTER TABLE market_items ADD COLUMN validation TEXT NOT NULL DEFAULT '';
+ALTER TABLE market_items ADD COLUMN disclosure TEXT NOT NULL DEFAULT '';
+ALTER TABLE market_items ADD COLUMN pack_meta TEXT NOT NULL DEFAULT '';
+`
+
+/** v10：管理员共享推送 —— 市场条目可标记「推送全员」（仅技能/预设，
+ * launch 时自动装进每个用户 home）；user_plugins 记录安装来源
+ * （shared = 管理员推送，用户不可自行卸载），取消推送时降级回 user。 */
+const V10_SCHEMA = `
+ALTER TABLE market_items ADD COLUMN shared INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE user_plugins ADD COLUMN source TEXT NOT NULL DEFAULT 'user';
+`
+
+/** v11：定时 agent 任务 —— 每用户的一次性 headless DSH 任务调度
+ * （interval / daily 两种排程）与运行历史（输出尾部留在 detail，
+ * 不写用户工作区）。运行状态只落这两张表；进程管理仍在内存。 */
+const V11_SCHEMA = `
+CREATE TABLE IF NOT EXISTS scheduled_tasks (
+  id               TEXT PRIMARY KEY,
+  user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name             TEXT NOT NULL,
+  prompt           TEXT NOT NULL,
+  schedule_kind    TEXT NOT NULL CHECK (schedule_kind IN ('interval','daily')),
+  interval_minutes INTEGER,
+  daily_time       TEXT,
+  enabled          INTEGER NOT NULL DEFAULT 1,
+  created_at       INTEGER NOT NULL,
+  last_run_at      INTEGER,
+  last_status      TEXT,
+  next_run_at      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_next ON scheduled_tasks(enabled, next_run_at);
+
+CREATE TABLE IF NOT EXISTS scheduled_task_runs (
+  id          TEXT PRIMARY KEY,
+  task_id     TEXT NOT NULL REFERENCES scheduled_tasks(id) ON DELETE CASCADE,
+  trigger_kind TEXT NOT NULL DEFAULT 'scheduled',
+  started_at  INTEGER NOT NULL,
+  finished_at INTEGER,
+  status      TEXT NOT NULL DEFAULT 'running',
+  detail      TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_runs_task ON scheduled_task_runs(task_id, started_at);
+`
+
+/** v12：入站 webhook —— 把内网事件（CI 完成审批、表单提交等）转换成
+ * 一次性 headless DSH 任务的触发器。每个 hook 随机 128-bit token，
+ * 命中即以归属用户的身份跑 prompt；日志（任务历史）复用
+ * scheduled_task_runs（task_id 为空语义不可行，改为独立列冗余 name）。 */
+const V12_SCHEMA = `
+CREATE TABLE IF NOT EXISTS inbound_webhooks (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  prompt     TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  enabled    INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  last_fired_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS webhook_fire_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  webhook_id TEXT NOT NULL REFERENCES inbound_webhooks(id) ON DELETE CASCADE,
+  fired_at   INTEGER NOT NULL,
+  status     TEXT NOT NULL,
+  detail     TEXT
+);
+`
+
+/** v13：补查询索引 —— webhook 触发日志按（hook, 时间）倒序翻页、
+ * 任务与 webhook 的按用户列表/计数此前都只能全表扫描
+ * （SQLite 外键不会自动建索引，v11 给 runs 建过、v12 漏了这条）。 */
+const V13_SCHEMA = `
+CREATE INDEX IF NOT EXISTS idx_webhook_fires ON webhook_fire_log(webhook_id, fired_at);
+CREATE INDEX IF NOT EXISTS idx_tasks_user ON scheduled_tasks(user_id);
+CREATE INDEX IF NOT EXISTS idx_webhooks_user ON inbound_webhooks(user_id);
+`
+
 interface Migration {
   version: number
   name: string
@@ -183,6 +268,11 @@ const MIGRATIONS: readonly Migration[] = [
   { version: 6, name: '删除 dsh_instances 与 api_key_ref', sql: V6_SCHEMA },
   { version: 7, name: '会话活跃/应用设置/插件市场', sql: V7_SCHEMA },
   { version: 8, name: '清理 users 死列', sql: V8_SCHEMA },
+  { version: 9, name: '市场条目校验/披露/打包元数据', sql: V9_SCHEMA },
+  { version: 10, name: '市场条目共享推送与安装来源', sql: V10_SCHEMA },
+  { version: 11, name: '定时 agent 任务与运行历史', sql: V11_SCHEMA },
+  { version: 12, name: '入站 webhook 与触发日志', sql: V12_SCHEMA },
+  { version: 13, name: '任务/webhook 用户索引与触发日志索引', sql: V13_SCHEMA },
 ]
 
 /** 在单个事务内应用所有尚未应用的迁移。 */

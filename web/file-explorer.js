@@ -28,6 +28,7 @@
   }
   function nameOf(path) { return path.split('/').pop() }
   var fmtSize = window.DshCommon.fmtSize
+  var fmtDateTime = window.DshCommon.fmtDateTime
   function rawUrl(path, download) {
     return '/api/fs/raw?path=' + encodeURIComponent(path) + (download ? '&download=1' : '')
   }
@@ -35,6 +36,7 @@
   function initFileExplorer(ctx) {
     var api = ctx.api
     var esc = ctx.esc
+    var emptyRow = window.DshCommon.emptyRow
     var $ = function (id) { return document.getElementById(id) }
 
     // ---------- 路径状态（桌面网格与文件窗口共享） ----------
@@ -217,7 +219,7 @@
       rows.innerHTML = ''
       var entries = visibleEntries()
       if (!entries.length) {
-        rows.innerHTML = '<tr class="empty"><td colspan="5">' + (lastEntries.length ? '没有匹配的条目' : '此文件夹为空') + '</td></tr>'
+        rows.innerHTML = emptyRow(5, lastEntries.length ? '没有匹配的条目' : '此文件夹为空')
       } else {
         if (p) rows.insertAdjacentHTML('beforeend', '<tr><td class="dir" data-up="1">..</td><td></td><td></td><td></td><td></td></tr>')
         for (var i = 0; i < entries.length; i++) {
@@ -230,7 +232,7 @@
           actions += ACTIONS.rename + ACTIONS.move + ACTIONS.del
           rows.insertAdjacentHTML(
             'beforeend',
-            '<tr data-name="' + esc(e.name) + '" data-type="' + e.type + '"><td' + nameCls + '>' + icon + esc(e.name) + '</td><td>' + (e.type === 'dir' ? '文件夹' : '文件') + '</td><td>' + fmtSize(e.size) + '</td><td>' + new Date(e.mtimeMs).toLocaleString() + '</td><td class="actions">' + actions + '</td></tr>',
+            '<tr data-name="' + esc(e.name) + '" data-type="' + e.type + '"><td' + nameCls + '>' + icon + esc(e.name) + '</td><td>' + (e.type === 'dir' ? '文件夹' : '文件') + '</td><td>' + fmtSize(e.size) + '</td><td>' + fmtDateTime(e.mtimeMs) + '</td><td class="actions">' + actions + '</td></tr>',
           )
         }
       }
@@ -277,7 +279,7 @@
         var icon = ficon(hit.type)
         rows.insertAdjacentHTML(
           'beforeend',
-          '<tr class="search-hit" data-path="' + esc(hit.path) + '" data-type="' + hit.type + '"><td class="name-cell">' + icon + esc(hit.path) + '</td><td>' + (hit.type === 'dir' ? '文件夹' : '文件') + '</td><td>' + fmtSize(hit.size) + '</td><td>' + new Date(hit.mtimeMs).toLocaleString() + '</td><td class="actions"><button class="btn small ghost" data-open-hit="1">打开</button></td></tr>',
+          '<tr class="search-hit" data-path="' + esc(hit.path) + '" data-type="' + hit.type + '"><td class="name-cell">' + icon + esc(hit.path) + '</td><td>' + (hit.type === 'dir' ? '文件夹' : '文件') + '</td><td>' + fmtSize(hit.size) + '</td><td>' + fmtDateTime(hit.mtimeMs) + '</td><td class="actions"><button class="btn small ghost" data-open-hit="1">打开</button></td></tr>',
         )
       }
     }
@@ -530,7 +532,7 @@
         moveDirs.innerHTML = '<p class="hint">此目录下没有子文件夹</p>'
       } else {
         for (var j = 0; j < dirs.length; j++) {
-          moveDirs.insertAdjacentHTML('beforeend', '<div class="move-dir-item" data-name="' + esc(dirs[j].name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>' + esc(dirs[j].name) + '</div>')
+          moveDirs.insertAdjacentHTML('beforeend', '<div class="move-dir-item" data-name="' + esc(dirs[j].name) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICON_DIR_PATH + '</svg>' + esc(dirs[j].name) + '</div>')
         }
       }
       // 目标不能是源本身或源的子目录（服务端同样强制）。
@@ -801,7 +803,7 @@
         ['名称', t.name],
         ['类型', t.type === 'dir' ? '文件夹' : '文件'],
         ['大小', e ? fmtSize(e.size) : '—'],
-        ['修改时间', e && e.mtimeMs ? new Date(e.mtimeMs).toLocaleString() : '—'],
+        ['修改时间', e && e.mtimeMs ? fmtDateTime(e.mtimeMs) : '—'],
         ['所在位置', deskPathLabel()],
       ]
       propsBody.innerHTML = ''

@@ -11,10 +11,10 @@
  * @module dsh-admin/fs/shared-settings
  */
 
-import { randomBytes } from 'node:crypto'
-import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { Document, parseDocument } from 'yaml'
+import { atomicWriteFile } from './storage.js'
 
 /** 持久化在 `shared_config.payload` 列中的结构。 */
 export interface SharedConfigPayload {
@@ -59,13 +59,9 @@ async function readDoc(file: string): Promise<Document> {
   return doc
 }
 
-/** 序列化到临时文件、chmod 0600、再原子地 rename 覆盖目标文件。
- * 临时文件名带随机后缀，因此并发应用绝不会共享半截写入。 */
+/** 序列化到临时文件、chmod 0600、再原子地 rename 覆盖目标文件。 */
 async function writeDocAtomic(file: string, doc: Document): Promise<void> {
-  const tmp = `${file}.tmp-${process.pid.toString(36)}-${randomBytes(6).toString('hex')}`
-  await writeFile(tmp, String(doc), { mode: 0o600 })
-  await chmod(tmp, 0o600)
-  await rename(tmp, file)
+  await atomicWriteFile(file, String(doc), { mode: 0o600 })
 }
 
 /** payload 一半（routes 或 refs）中被另一半丢弃的键。 */
