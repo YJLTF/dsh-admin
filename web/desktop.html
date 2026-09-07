@@ -112,13 +112,16 @@
       </div>
 
       <div class="taskbar">
+        <!-- 分组与上方启动坞一致：DSH | 文件 | 自动化 | 管理（随角色显隐） -->
         <div class="app" data-open="dsh" role="button" tabindex="0" aria-label="DSH"><img src="/deepseek.webp" alt="DSH" /></div>
         <span class="tsep" aria-hidden="true"></span>
         <div class="app" data-open="files" role="button" tabindex="0" aria-label="我的文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
-        <div class="app" data-open="tasks" role="button" tabindex="0" aria-label="定时任务" title="定时任务"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
         <div class="app" data-app="upload" role="button" tabindex="0" aria-label="上传文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
         <div class="app" data-app="uploaddir" role="button" tabindex="0" aria-label="上传文件夹"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 16v-5"/><path d="M10 13l2-2 2 2"/></svg></div>
         <div class="app" data-app="newfile" role="button" tabindex="0" aria-label="新建文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 12v5M9.5 14.5h5"/></svg></div>
+        <span class="tsep" aria-hidden="true"></span>
+        <div class="app" data-open="tasks" role="button" tabindex="0" aria-label="定时任务" title="定时任务"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+        <div class="app" data-open="webhooks" role="button" tabindex="0" aria-label="Webhook" title="Webhook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6a3 3 0 1 1 4.2 2.7L15 13"/><path d="M6.8 10.5A3 3 0 1 0 9 16h5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="17" r="3"/></svg></div>
         <span class="tsep hidden" id="adminTaskSep" aria-hidden="true"></span>
         <div class="app hidden" id="adminTask" data-open="admin" role="button" tabindex="0" aria-label="用户管理" title="用户管理"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/></svg></div>
         <div class="app hidden" id="sharedTask" data-open="shared" role="button" tabindex="0" aria-label="共享配置" title="共享配置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg></div>
