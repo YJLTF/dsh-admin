@@ -21,6 +21,9 @@ import { extractTgz } from './market.js'
 /** dsh 本体在 CLI 目录下的固定位置。 */
 const DSH_PACKAGE_DIR = join('node_modules', '@deepseek-ai', 'dsh')
 
+/** dsh 本体 package.json 在 node_modules 目录内的相对位置。 */
+const DSH_PKG_IN_MODULES = join('@deepseek-ai', 'dsh', 'package.json')
+
 async function readJson(file: string): Promise<Record<string, unknown> | null> {
   try {
     const parsed = JSON.parse(await readFile(file, 'utf8'))
@@ -66,8 +69,10 @@ export interface DshCliUpdateResult {
  * 解包 + 校验 + 原子替换 `<cliDir>/node_modules`。
  *
  * staging 建在 cliDir **内部**（跨文件系统 rename 不是原子的，挂载
- * 目录与容器可写层可能不同 fs）。归档顶层剥离后即 `node_modules`
- * 本身（pack-dsh.ps1 形态），散装归档则在其下再找一层。
+ * 目录与容器可写层可能不同 fs）。pack-dsh.ps1 产物的唯一顶层目录
+ * `node_modules/` 会被 extractTgz 按 codeload 规则剥离，解包结果即
+ * `node_modules` 内容本身；顶层不止一项的归档不剥离，需下探一层。
+ * 两处各探测一次 `@deepseek-ai/dsh` + `.bin`，探测到的目录整体换名。
  */
 export async function updateDshCli(config: ServerConfig, tgzPath: string): Promise<DshCliUpdateResult> {
   const cliDir = config.dshCliDir
@@ -82,7 +87,7 @@ export async function updateDshCli(config: ServerConfig, tgzPath: string): Promi
     let modulesDir: string | null = null
     let newVersion: string | null = null
     for (const dir of [extracted, join(extracted, 'node_modules')]) {
-      const pkg = await readJson(join(dir, DSH_PACKAGE_DIR, 'package.json'))
+      const pkg = await readJson(join(dir, DSH_PKG_IN_MODULES))
       const version = typeof pkg?.version === 'string' && pkg.version !== '' ? pkg.version : null
       if (version !== null && (await exists(join(dir, '.bin')))) {
         modulesDir = dir
@@ -108,6 +113,9 @@ export async function updateDshCli(config: ServerConfig, tgzPath: string): Promi
         await rename(backup, target).catch(() => {}) // 回滚失败只能如实上报错误
         throw err
       }
+      // 备份只是换名后的旧 node_modules，成功即删；删不掉也只是垃圾，
+      // 不该让已成功的更新报错。
+      await rm(backup, { recursive: true, force: true }).catch(() => {})
     } else {
       await rename(modulesDir, target)
     }

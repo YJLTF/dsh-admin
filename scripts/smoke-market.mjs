@@ -276,13 +276,46 @@ try {
       ok(leftovers.length === 0, '备份与 staging 目录已清理')
       ok(await exists(join(cliDir, 'node_modules', '.bin')), '替换后 .bin 就位')
     } catch (err) {
-      if (process.platform === 'win32' && /EPERM|symlink|符号链接/i.test(String(err))) {
+      // 只按 EPERM/symlink 识别解包权限问题；不能含中文「符号链接」——
+      // 那是 InvalidCliArchiveError 的文案，宽匹配会把真实回归吞成跳过。
+      if (process.platform === 'win32' && /EPERM|symlink/i.test(String(err))) {
         skip('真实归档替换', 'Windows 无符号链接权限——容器/Linux 环境运行即可覆盖')
       } else {
         throw err
       }
     }
   }
+
+  // 免符号链接的布局回归：pack-dsh.ps1 形态（唯一顶层 node_modules/，
+  // 会被 extractTgz 按 codeload 规则剥离）与顶层多项的散装形态都必须
+  // 通过校验并整体换名——用例不依赖符号链接，Windows 上即可运行。
+  console.log('\n[6b] dsh-cli 归档布局回归（无符号链接）')
+  const cliDir2 = join(root, 'cli2')
+  await mkdir(cliDir2, { recursive: true })
+  const cliConfig2 = fakeConfig(dataRoot, { dshCliDir: cliDir2 })
+  const fakeCliSrc = join(root, 'src-fakecli')
+  await writeTree(fakeCliSrc, {
+    'node_modules/@deepseek-ai/dsh/package.json': JSON.stringify({ name: '@deepseek-ai/dsh', version: '8.8.8' }),
+    'node_modules/.bin/dsh': '#!/bin/sh\n',
+  })
+  const fakeTgz = join(archives, 'fakecli.tgz')
+  await packAsArchive(fakeCliSrc, fakeTgz, 'node_modules')
+  const rFake = await updateDshCli(cliConfig2, fakeTgz)
+  ok(rFake.previousVersion === null && rFake.newVersion === '8.8.8', 'pack-dsh.ps1 形态（顶层 node_modules 被剥离）校验通过')
+  ok(await exists(join(cliDir2, 'node_modules', '.bin', 'dsh')), '剥离形态：node_modules 整体就位')
+  const looseCliSrc = join(root, 'src-fakecli-loose')
+  await writeTree(looseCliSrc, {
+    '@deepseek-ai/dsh/package.json': JSON.stringify({ name: '@deepseek-ai/dsh', version: '8.8.9' }),
+    '.bin/dsh': '#!/bin/sh\n',
+  })
+  const looseTgz = join(archives, 'fakecli-loose.tgz')
+  // 不能把 '@deepseek-ai' 直接作为打包条目（node-tar 会当成 @file 引用），打整个目录。
+  await tar.c({ gzip: true, file: looseTgz, cwd: looseCliSrc, portable: true }, ['.'])
+  const rLoose = await updateDshCli(cliConfig2, looseTgz)
+  ok(rLoose.previousVersion === '8.8.8' && rLoose.newVersion === '8.8.9', '散装形态（顶层多项不剥离）校验通过并二次替换')
+  ok(await exists(join(cliDir2, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')), '散装形态：node_modules 整体就位')
+  const cli2Leftovers = (await readdir(cliDir2)).filter((name) => name.startsWith('.node_modules.old-') || name.startsWith('.update-staging-'))
+  ok(cli2Leftovers.length === 0, '备份与 staging 目录已清理')
 
   // ---------- 7. 版本判定 ----------
   console.log('\n[7] live patch 重载版本判定')
