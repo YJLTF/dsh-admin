@@ -513,8 +513,14 @@
           <code>*.meta.json</code>，卡片会显示自包含与适配的 dsh 版本。
         </div>
         <div class="import-row">
-          <input id="marketTgz" type="file" accept=".tgz,.tar.gz,application/gzip" aria-label="选择 .tar.gz 插件包" />
-          <input id="marketMeta" type="file" accept=".json,application/json" aria-label="可选：offline-packager 的 .meta.json" />
+          <label class="import-field">
+            <span class="import-field-label">插件包（.tar.gz，必选）</span>
+            <input id="marketTgz" type="file" accept=".tgz,.tar.gz,application/gzip" />
+          </label>
+          <label class="import-field">
+            <span class="import-field-label">打包元数据（offline-packager 的 .meta.json，可选）</span>
+            <input id="marketMeta" type="file" accept=".json,application/json" />
+          </label>
           <button class="btn primary small" id="marketImportBtn">导入</button>
         </div>
         <p class="msg hint" id="marketImportMsg"></p>

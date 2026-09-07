@@ -418,6 +418,9 @@ table.files td.actions, table.files th.actions { text-align: right; white-space:
 
 /* 管理台（基础表格样式与 table.files 共享） */
 table.admin tr.empty td { color: var(--ink-soft); text-align: center; padding: 22px 10px; }
+/* 市场管理表：所有列单行显示（名称/类型/时间/徽章/按钮都不折行），
+ * 窗口过窄时由 .window-body 横向滚动兜底，靠加宽默认窗口尺寸避免。 */
+#marketAdminRows th, #marketAdminRows td { white-space: nowrap; }
 .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
 .badge.admin { background: #e7edff; color: #3f5fd0; }
 .badge.pending { background: #fff3dd; color: #b0761a; }
@@ -490,6 +493,11 @@ table.admin tr.empty td { color: var(--ink-soft); text-align: center; padding: 2
   background: var(--surface-2);
 }
 .import-row input[type="file"] { flex: 1; min-width: 200px; font-size: 13px; color: var(--ink-soft); }
+/* 带标签的上传字段：小标题在输入框上方，点标签即可唤起文件选择。
+ * 市场导入行用「插件包 + 可选元数据」两栏并排，各带明确标识。 */
+.import-field { flex: 1 1 240px; min-width: 220px; display: flex; flex-direction: column; gap: 5px; }
+.import-field-label { font-size: 12px; font-weight: 600; color: var(--ink-soft); cursor: pointer; }
+.import-field input[type="file"] { width: 100%; min-width: 0; flex: none; }
 .import-row input[type="file"]::file-selector-button {
   margin-right: 12px; padding: 7px 12px; cursor: pointer;
   border: 1px solid var(--line); border-radius: 8px; background: var(--surface);

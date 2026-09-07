@@ -22,7 +22,7 @@
     shared: [760, 600],
     account: [780, 540],
     ops: [820, 500],
-    market: [700, 600],
+    market: [860, 600],
     audit: [780, 600],
     settings: [520, 400],
     tasks: [680, 600],
