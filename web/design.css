@@ -509,6 +509,10 @@ table.admin tr.empty td { color: var(--ink-soft); text-align: center; padding: 2
 .form-field .set-title .hint { font-weight: 400; }
 .form-field .set-input { width: 100%; }
 .form-field textarea.set-input { resize: vertical; line-height: 1.6; font-family: inherit; min-height: 74px; }
+/* 排程行（定时任务窗口）：select 与 number/time 输入的原生高度不同，
+ * 统一定高让一行里的控件对齐；嵌套的输入组去掉 row-actions 的下边距。 */
+#taskKind, #taskInterval, #taskDaily { height: 36px; padding-top: 0; padding-bottom: 0; }
+#taskIntervalWrap, #taskDailyWrap { margin-bottom: 0; align-items: center; }
 /* 开关（iOS 风格拨杆） */
 .switch { position: relative; width: 42px; height: 24px; flex: none; cursor: pointer; }
 .switch input { opacity: 0; width: 0; height: 0; }
