@@ -677,7 +677,7 @@
         const st = inst === null ? 'stopped' : inst.status
         const label = st === 'starting' ? '启动中…（等待 DSH 服务就绪）' : (STATE_LABEL[st] || st)
         const restartNote = inst !== null && inst.restarts > 0 ? `（本次连续自动重启 ×${inst.restarts}）` : ''
-        const err = crashed && inst.lastError ? `（${inst.lastError.slice(0, 120)}）` : ''
+        const err = st === 'crashed' && inst.lastError ? `（${inst.lastError.slice(0, 120)}）` : ''
         const stateEl = document.getElementById('dshState')
         const dot = st === 'running' ? 'on' : st === 'starting' ? 'starting' : 'off'
         stateEl.innerHTML = `<span class="dot ${dot}"></span> `
@@ -712,7 +712,14 @@
         if (!r.ok) return
         // 无论处于什么状态都先渲染 —— 否则页面刷新后窗口只能显示
         // HTML 里的静态「未运行」，与已在运行的实例不一致。
-        renderDshState(r.body)
+        // 渲染失败只记日志：一次渲染 bug 不能拖垮快轮询，否则状态
+        // 会永远停在上一帧（真发生过：渲染函数里一个悬空引用让状态
+        // 永远「未运行」且启动按钮反复提示 already_running）。
+        try {
+          renderDshState(r.body)
+        } catch (err) {
+          console.error('渲染 DSH 状态失败', err)
+        }
         if (openPending(r.body)) pollDshWhileStarting()
       }
       // starting 期间 1s 快轮询（后台 5s 轮询太慢）；running 但打开链接
