@@ -22,7 +22,8 @@
     "prepare": "npm run build",
     "dev": "node lib/cli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "smoke:market": "node scripts/smoke-market.mjs"
+    "smoke:market": "node scripts/smoke-market.mjs",
+    "smoke:shared-config": "node scripts/smoke-shared-config.mjs"
   },
   "dsh": {
     "plugin": true,

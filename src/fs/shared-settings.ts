@@ -3,8 +3,10 @@
  *
  * DSH 把模型提供商保存在 `<DSH_HOME>/settings.yaml` 的
  * `llm-pi-ai.providers` 命名空间下（route → profile，`apiKeyEnv` 指名一个
- * 凭据引用），凭据值保存在 `<DSH_HOME>/.credentials.yaml`
- * （ref → 原始 key）。运行中的 DSH 会监视这两份文档，因此外部写入
+ * 凭据引用），凭据值保存在 `<DSH_HOME>/.credentials.yaml` 的 `refs`
+ * 命名空间下（`refs.<ref>` → 原始 key；该文档顶层只允许
+ * `version`/`refs`/`records`，多余顶层键会让 DSH 启动即报
+ * unknown top-level key）。运行中的 DSH 会监视这两份文档，因此外部写入
  * 无需重启即可热加载。这里的编辑都是叶子级的（只设置或删除共享的
  * route/ref），因此用户自己的提供商、凭据、注释和格式都会保留 ——
  * 使用的是 DSH 自己修补这些文件时所用的同一套 `yaml` Document API。
@@ -33,6 +35,9 @@ export function parseSharedConfigPayload(text: string): SharedConfigPayload {
 
 /** DSH（以及 YAML 路径）都能接受的 route 与凭据 ref 键。 */
 const KEY_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+
+/** `.credentials.yaml` 的合法顶层键；凭据 ref 一律落在 `refs` 之下。 */
+const CREDENTIAL_TOP_KEYS = new Set(['version', 'refs', 'records'])
 
 /** 拒绝可能破坏 YAML 文档的 payload 键。 */
 export function validateSharedConfigKeys(payload: SharedConfigPayload): string | null {
@@ -88,15 +93,24 @@ export async function applySharedConfig(homeDir: string, next: SharedConfigPaylo
   }
   await writeDocAtomic(settingsPath, settings)
 
-  // 2. .credentials.yaml — <ref> → 原始 key（在 settings 之后写入，这样
+  // 2. .credentials.yaml — refs.<ref> → 原始 key（在 settings 之后写入，这样
   // 中途重载的运行中 DSH 只会看到最终一致的一对文档）。
   const credentialsPath = join(homeDir, '.credentials.yaml')
   const credentials = await readDoc(credentialsPath)
+  if (credentials.get('version') === undefined) credentials.set('version', 1)
+  // 历史版本把 ref 直接写在顶层，会让 DSH 启动即报 unknown top-level
+  // key；对已知 ref 做一次顶层清理兜底（保留键绝不触碰）。
+  for (const ref of new Set([
+    ...Object.keys(previous?.credentials ?? {}),
+    ...Object.keys(next.credentials),
+  ])) {
+    if (!CREDENTIAL_TOP_KEYS.has(ref)) credentials.deleteIn([ref])
+  }
   for (const ref of removedKeys(previous?.credentials, next.credentials)) {
-    credentials.deleteIn([ref])
+    credentials.deleteIn(['refs', ref])
   }
   for (const [ref, value] of Object.entries(next.credentials)) {
-    credentials.setIn([ref], value)
+    credentials.setIn(['refs', ref], value)
   }
   await writeDocAtomic(credentialsPath, credentials)
 }

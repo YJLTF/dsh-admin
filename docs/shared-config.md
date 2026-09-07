@@ -23,7 +23,7 @@ providers:
       claude-sonnet-4-5: { input: [text] }
     headers: { X-Custom: value }  # 额外请求头（可选）
 
-# credentials：引用名 → API key 明文（写入用户 .credentials.yaml）
+# credentials：引用名 → API key 明文（写入用户 .credentials.yaml 的 refs 命名空间）
 credentials:
   DEEPSEEK_KEY: sk-xxxx
 ```
@@ -42,7 +42,8 @@ credentials:
 
 - 凭据**明文只对管理员接口返回**（`GET /api/admin/shared-config`）；用户接口
   （`GET /api/me/shared-config`）只暴露提供方名与凭据**引用名**，key 永不下发到用户浏览器。
-- 合并写入用户 `.credentials.yaml` 时文件权限 `0600`、临时文件原子 rename。
+- 合并写入用户 `.credentials.yaml`（凭据落在 `refs.<引用名>` 下，该文档顶层
+  只允许 `version`/`refs`/`records`）时文件权限 `0600`、临时文件原子 rename。
 - 管理端 UI（admin / 桌面管理台）输入凭据后仅显示引用名，不回显明文。
 
 ## 接收与合并
